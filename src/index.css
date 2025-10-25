@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 0 0% 3%;
+    --foreground: 0 0% 98%;
+
+    --card: 0 0% 6%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 0 0% 6%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 0 84% 60%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 60%;
+
+    --accent: 0 84% 60%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 14%;
+    --input: 0 0% 14%;
+    --ring: 0 84% 60%;
+
+    --radius: 0.75rem;
+
+    /* JDM Theme Specific */
+    --glow-primary: 0 84% 60%;
+    --glow-intense: 0 100% 50%;
+    
+    /* Gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(0, 84%, 60%) 0%, hsl(0, 0%, 3%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(0, 0%, 8%) 0%, hsl(0, 0%, 4%) 100%);
+    
+    /* Shadows */
+    --shadow-glow: 0 0 40px hsla(0, 84%, 60%, 0.3);
+    --shadow-intense: 0 0 60px hsla(0, 100%, 50%, 0.5);
+    --shadow-card: 0 10px 40px hsla(0, 0%, 0%, 0.6);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
