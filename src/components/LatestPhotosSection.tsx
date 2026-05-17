@@ -62,11 +62,12 @@ const LatestPhotosSection = () => {
           {photos.map((photo, index) => (
             <motion.div
               key={photo.id}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0, y: 24, scale: 0.97 }}
+              whileInView={{ opacity: 1, y: 0, scale: 1 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: index * 0.08 }}
-              className={`group relative overflow-hidden rounded-lg cursor-pointer ${
+              transition={{ duration: 0.55, delay: index * 0.07, ease: [0.22, 1, 0.36, 1] }}
+              whileHover={{ y: -4, scale: 1.015 }}
+              className={`group relative overflow-hidden rounded-lg cursor-pointer card-glow-hover shadow-card ${
                 index === 0 ? "md:col-span-2 md:row-span-2" : ""
               }`}
               style={{ aspectRatio: index === 0 ? "16/10" : "4/3" }}

@@ -105,10 +105,10 @@ const Navbar = () => {
 
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
         isScrolled
-          ? "bg-background/95 backdrop-blur-md border-b border-border shadow-glow"
-          : "bg-transparent"
+          ? "dark:nav-glass bg-background/97 dark:bg-transparent border-b border-border/60 shadow-sm"
+          : "bg-transparent border-b border-transparent"
       }`}
     >
       <div className="container mx-auto px-4">
@@ -144,17 +144,13 @@ const Navbar = () => {
               <motion.button
                 key={link.name}
                 onClick={() => handleNavClick(link.href, link.isExternal)}
-                className="text-foreground hover:text-primary transition-colors font-inter font-medium relative"
+                className="text-foreground hover:text-primary transition-colors duration-200 font-inter font-medium relative group pb-0.5"
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                whileHover={{ scale: 1.05 }}
-                transition={{
-                  duration: 0.2,
-                  delay: index * 0.05,
-                  ease: "easeOut"
-                }}
+                transition={{ duration: 0.25, delay: index * 0.06, ease: "easeOut" }}
               >
                 {link.name}
+                <span className="absolute bottom-0 left-0 h-px w-0 bg-primary transition-all duration-300 group-hover:w-full rounded-full" />
               </motion.button>
             ))}
             <motion.div

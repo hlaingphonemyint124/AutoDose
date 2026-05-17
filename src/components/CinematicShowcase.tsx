@@ -75,7 +75,7 @@ const CinematicShowcase = () => {
                   whileInView={{ opacity: 1, y: 0, rotateX: 0 }}
                   viewport={{ once: true, amount: 0.35 }}
                   transition={{ duration: 0.62, delay: index * 0.08, ease: "easeOut" }}
-                  className="group border border-border bg-card p-4 shadow-card transition duration-300 hover:-translate-y-1 hover:border-primary/45 hover:shadow-glow"
+                  className="group border border-border bg-card p-4 shadow-card transition-all duration-300 hover:-translate-y-2 hover:border-primary/55 hover:shadow-glow card-shimmer-hover card-glow-hover cursor-default"
                 >
                   <div className="mb-5 flex h-11 w-11 items-center justify-center border border-border bg-background text-primary transition group-hover:border-primary">
                     <frame.icon size={20} />

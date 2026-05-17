@@ -2,13 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design system. All colors MUST be HSL.
-   Two themes: light (default, red + white) and dark (.dark class).
-*/
+/* ========================================================
+   AUTODOSE — Design System
+   Colors: HSL only. Themes: light (red + white), dark (black + red).
+   ======================================================== */
 
 @layer base {
   :root {
-    /* === LIGHT THEME (Red & White, professional) === */
+    /* === LIGHT THEME === */
     --background: 0 0% 100%;
     --foreground: 0 0% 8%;
 
@@ -39,22 +40,19 @@
 
     --radius: 0.75rem;
 
-    /* JDM Theme Specific */
     --glow-primary: 0 84% 50%;
     --glow-intense: 0 100% 45%;
 
-    /* Gradients */
     --gradient-hero: linear-gradient(135deg, hsl(0, 84%, 50%) 0%, hsl(0, 0%, 100%) 100%);
     --gradient-card: linear-gradient(180deg, hsl(0, 0%, 100%) 0%, hsl(0, 0%, 97%) 100%);
 
-    /* Shadows */
     --shadow-glow: 0 0 40px hsla(0, 84%, 50%, 0.25);
     --shadow-intense: 0 0 60px hsla(0, 100%, 45%, 0.4);
     --shadow-card: 0 8px 30px hsla(0, 0%, 0%, 0.08);
   }
 
   .dark {
-    /* === DARK THEME (original AUTODOSE black + red) === */
+    /* === DARK THEME (AUTODOSE black + red) === */
     --background: 0 0% 3%;
     --foreground: 0 0% 98%;
 
@@ -89,42 +87,33 @@
     --gradient-hero: linear-gradient(135deg, hsl(0, 84%, 60%) 0%, hsl(0, 0%, 3%) 100%);
     --gradient-card: linear-gradient(180deg, hsl(0, 0%, 8%) 0%, hsl(0, 0%, 4%) 100%);
 
-    --shadow-glow: 0 0 40px hsla(0, 84%, 60%, 0.3);
-    --shadow-intense: 0 0 60px hsla(0, 100%, 50%, 0.5);
-    --shadow-card: 0 10px 40px hsla(0, 0%, 0%, 0.6);
+    --shadow-glow: 0 0 40px hsla(0, 84%, 60%, 0.30);
+    --shadow-intense: 0 0 60px hsla(0, 100%, 50%, 0.50);
+    --shadow-card: 0 10px 40px hsla(0, 0%, 0%, 0.60);
   }
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
+  * { @apply border-border; }
 
   html {
     color-scheme: light;
-  }
-
-  html.dark {
-    color-scheme: dark;
-  }
-
-  body {
-    @apply bg-background text-foreground;
-    transition: background-color 0.3s ease, color 0.3s ease;
-  }
-
-  html {
     scroll-behavior: smooth;
     overflow-x: hidden;
   }
 
+  html.dark { color-scheme: dark; }
+
   body {
+    @apply bg-background text-foreground;
     overflow-x: hidden;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 
-  /* Light mode: disable ALL blur effects globally for a crisp, professional look. */
+  /* Light mode: disable ALL blur for crisp professional look */
   html:not(.dark) *,
   html:not(.dark) *::before,
   html:not(.dark) *::after {
@@ -134,7 +123,6 @@
   html:not(.dark) [class*="blur-"]:not([class*="backdrop-blur"]) {
     filter: none !important;
   }
-  /* Replace translucent surfaces (commonly paired with backdrop-blur) with solid tokens */
   html:not(.dark) [class*="backdrop-blur"][class*="bg-background/"],
   html:not(.dark) [class*="backdrop-blur"][class*="bg-card/"],
   html:not(.dark) [class*="backdrop-blur"][class*="bg-secondary/"],
@@ -144,8 +132,13 @@
   }
 }
 
-/* === Red glow pulse animation for buttons === */
+/* ========================================================
+   ANIMATIONS & KEYFRAMES
+   ======================================================== */
+
 @layer utilities {
+
+  /* --- Glow pulse on primary buttons --- */
   @keyframes red-glow-pulse {
     0%, 100% {
       box-shadow: 0 0 0 0 hsla(var(--primary) / 0.55),
@@ -153,7 +146,7 @@
     }
     50% {
       box-shadow: 0 0 0 6px hsla(var(--primary) / 0),
-                  0 0 22px 4px hsla(var(--primary) / 0.55);
+                  0 0 26px 5px hsla(var(--primary) / 0.55);
     }
   }
   .btn-red-glow {
@@ -163,23 +156,105 @@
     animation-duration: 1.2s;
   }
 
-  .perspective-hero {
-    perspective: 1200px;
+  /* --- Hero scan line across backdrop --- */
+  @keyframes cinematic-scan {
+    0%   { transform: translateX(-110%); opacity: 0; }
+    15%, 75% { opacity: 1; }
+    100% { transform: translateX(110%); opacity: 0; }
+  }
+  .cinematic-scan {
+    animation: cinematic-scan 5.5s ease-in-out infinite;
   }
 
-  .preserve-3d {
-    transform-style: preserve-3d;
+  /* --- Subtle floating (nav sign-in badge, etc.) --- */
+  @keyframes float-y {
+    0%, 100% { transform: translateY(0px); }
+    50%       { transform: translateY(-6px); }
+  }
+  .animate-float {
+    animation: float-y 3s ease-in-out infinite;
   }
 
-  .auto-perspective {
-    perspective: 1400px;
+  /* --- Shimmer loading skeleton --- */
+  @keyframes shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position:  200% center; }
+  }
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--secondary)) 50%,
+      hsl(var(--muted)) 75%
+    );
+    background-size: 200% auto;
+    animation: shimmer 1.6s linear infinite;
   }
 
+  /* --- Reveal up (scroll-triggered via Framer Motion) --- */
+  @keyframes reveal-up {
+    from { opacity: 0; transform: translateY(28px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* --- Red stripe running across section dividers --- */
+  @keyframes stripe-run {
+    0%   { transform: scaleX(0); transform-origin: left; }
+    50%  { transform: scaleX(1); transform-origin: left; }
+    50.01% { transform: scaleX(1); transform-origin: right; }
+    100% { transform: scaleX(0); transform-origin: right; }
+  }
+  .animate-stripe-run {
+    animation: stripe-run 3s ease-in-out infinite;
+  }
+
+  /* --- Card tilt shimmer --- */
+  @keyframes card-shimmer {
+    0%   { opacity: 0; transform: translateX(-100%) skewX(-12deg); }
+    80%  { opacity: 0.6; }
+    100% { opacity: 0; transform: translateX(250%) skewX(-12deg); }
+  }
+
+  /* --- Typewriter cursor blink --- */
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
+  }
+  .cursor-blink::after {
+    content: "|";
+    animation: blink 1s step-end infinite;
+    margin-left: 1px;
+  }
+
+  /* --- Fade in --- */
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
+
+  /* --- Scale in --- */
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.92); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  .animate-scale-in { animation: scale-in 0.4s ease-out forwards; }
+
+  /* =========================================================
+     LAYOUT & PERSPECTIVE HELPERS
+     ========================================================= */
+
+  .perspective-hero  { perspective: 1200px; }
+  .preserve-3d       { transform-style: preserve-3d; }
+  .auto-perspective  { perspective: 1400px; }
+
+  /* === Hero cinematic backdrop (blurred+saturated bg video/img) === */
   .hero-cinematic-backdrop {
-    filter: blur(14px) saturate(1.12) contrast(1.08) !important;
+    filter: blur(14px) saturate(1.14) contrast(1.08) !important;
     transform: translateZ(0);
   }
 
+  /* === YouTube background embed: full-bleed, no controls === */
   .hero-video-embed {
     position: absolute;
     left: 50%;
@@ -198,41 +273,181 @@
     backface-visibility: hidden;
   }
 
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { scrollbar-width: none; -ms-overflow-style: none; }
+
+  .text-balance { text-wrap: balance; }
+
+  /* =========================================================
+     CARD HOVER EFFECTS
+     ========================================================= */
+
+  /* Shimmer glide on hover */
+  .card-shimmer-hover {
+    position: relative;
+    overflow: hidden;
+  }
+  .card-shimmer-hover::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.10) 50%, transparent 60%);
+    transform: translateX(-100%) skewX(-12deg);
+    transition: transform 0s;
+    pointer-events: none;
+  }
+  .card-shimmer-hover:hover::after {
+    animation: card-shimmer 0.65s ease forwards;
   }
 
-  .text-balance {
-    text-wrap: balance;
+  /* Red glow ring on card hover */
+  .card-glow-hover:hover {
+    box-shadow: 0 0 0 1px hsla(var(--primary) / 0.45),
+                0 8px 32px hsla(var(--primary) / 0.18),
+                var(--shadow-card);
   }
 
-  @keyframes cinematic-scan {
-    0% {
-      transform: translateX(-100%);
-      opacity: 0;
-    }
-    22%, 62% {
-      opacity: 1;
-    }
-    100% {
-      transform: translateX(100%);
-      opacity: 0;
-    }
+  /* =========================================================
+     NAVIGATION
+     ========================================================= */
+
+  /* Glassmorphic nav backdrop (dark theme only) */
+  .dark .nav-glass {
+    background: linear-gradient(
+      180deg,
+      hsla(0, 0%, 3%, 0.96) 0%,
+      hsla(0, 0%, 3%, 0.90) 100%
+    );
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    border-bottom: 1px solid hsla(0, 0%, 100%, 0.06);
   }
 
-  .cinematic-scan {
-    animation: cinematic-scan 4.8s ease-in-out infinite;
+  /* Active nav link underline */
+  .nav-link-active::after {
+    content: "";
+    position: absolute;
+    bottom: -2px;
+    left: 0; right: 0;
+    height: 2px;
+    background: hsl(var(--primary));
+    border-radius: 1px;
+    box-shadow: 0 0 8px hsl(var(--primary));
   }
 
-  @media (hover: none) {
-    .auto-perspective {
-      perspective: none;
-    }
+  /* =========================================================
+     SECTION TRANSITIONS
+     ========================================================= */
 
-    .hero-cinematic-backdrop {
-      filter: blur(10px) saturate(1.08) contrast(1.06) !important;
-    }
+  .section-reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
   }
+  .section-reveal.in-view {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Horizontal divider with animated red stripe */
+  .divider-animated {
+    position: relative;
+    height: 1px;
+    background: hsl(var(--border));
+    overflow: visible;
+  }
+  .divider-animated::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: hsl(var(--primary));
+    animation: stripe-run 3.5s ease-in-out infinite;
+  }
+
+  /* =========================================================
+     SCROLLBAR THEMING (dark mode)
+     ========================================================= */
+  .dark ::-webkit-scrollbar { width: 6px; height: 6px; }
+  .dark ::-webkit-scrollbar-track { background: hsl(var(--background)); }
+  .dark ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.6); }
+
+  /* =========================================================
+     FOCUS RING OVERRIDE (accessible, on-brand)
+     ========================================================= */
+  :focus-visible {
+    outline: 2px solid hsl(var(--primary));
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  /* =========================================================
+     PHOTO / VIDEO CARD POLISH
+     ========================================================= */
+
+  /* Aspect ratio overlay on card thumbnails */
+  .thumb-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top,
+      rgba(0,0,0,0.82) 0%,
+      rgba(0,0,0,0.22) 40%,
+      transparent 70%
+    );
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .group:hover .thumb-overlay { opacity: 1; }
+
+  /* Duration badge */
+  .duration-badge {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background: rgba(0,0,0,0.72);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 2px 7px;
+    border-radius: 4px;
+    backdrop-filter: blur(4px);
+  }
+
+  /* Progress bar on continue-watching cards */
+  .progress-bar-track {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    background: rgba(255,255,255,0.18);
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: hsl(var(--primary));
+    box-shadow: 0 0 6px hsl(var(--primary) / 0.7);
+    border-radius: 0 2px 2px 0;
+  }
+
+  /* =========================================================
+     FOOTER ENHANCEMENTS
+     ========================================================= */
+
+  .footer-social-icon {
+    transition: color 0.2s ease, border-color 0.2s ease,
+                transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .footer-social-icon:hover {
+    transform: translateY(-3px) scale(1.08);
+    box-shadow: 0 4px 16px hsla(var(--primary) / 0.28);
+  }
+
+  /* =========================================================
+     REDUCED MOTION OVERRIDE
+     ========================================================= */
 
   @media (prefers-reduced-motion: reduce) {
     *,
@@ -242,6 +457,20 @@
       animation-iteration-count: 1 !important;
       scroll-behavior: auto !important;
       transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* =========================================================
+     MOBILE TOUCH TARGETS
+     ========================================================= */
+  @media (hover: none) {
+    .auto-perspective { perspective: none; }
+    .hero-cinematic-backdrop {
+      filter: blur(10px) saturate(1.08) contrast(1.06) !important;
+    }
+    /* Increase tap target sizes */
+    button, a {
+      min-height: 44px;
     }
   }
 }
