@@ -1,0 +1,174 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design system. All colors MUST be HSL.
+   Two themes: light (default, red + white) and dark (.dark class).
+*/
+
+@layer base {
+  :root {
+    /* === LIGHT THEME (Red & White, professional) === */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 8%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 8%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 8%;
+
+    --primary: 0 84% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 12%;
+
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 40%;
+
+    --accent: 0 84% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 90%;
+    --input: 0 0% 92%;
+    --ring: 0 84% 50%;
+
+    --radius: 0.75rem;
+
+    /* JDM Theme Specific */
+    --glow-primary: 0 84% 50%;
+    --glow-intense: 0 100% 45%;
+
+    /* Gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(0, 84%, 50%) 0%, hsl(0, 0%, 100%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(0, 0%, 100%) 0%, hsl(0, 0%, 97%) 100%);
+
+    /* Shadows */
+    --shadow-glow: 0 0 40px hsla(0, 84%, 50%, 0.25);
+    --shadow-intense: 0 0 60px hsla(0, 100%, 45%, 0.4);
+    --shadow-card: 0 8px 30px hsla(0, 0%, 0%, 0.08);
+  }
+
+  .dark {
+    /* === DARK THEME (original AUTODOSE black + red) === */
+    --background: 0 0% 3%;
+    --foreground: 0 0% 98%;
+
+    --card: 0 0% 6%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 0 0% 6%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 0 84% 60%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 60%;
+
+    --accent: 0 84% 60%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 14%;
+    --input: 0 0% 14%;
+    --ring: 0 84% 60%;
+
+    --glow-primary: 0 84% 60%;
+    --glow-intense: 0 100% 50%;
+
+    --gradient-hero: linear-gradient(135deg, hsl(0, 84%, 60%) 0%, hsl(0, 0%, 3%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(0, 0%, 8%) 0%, hsl(0, 0%, 4%) 100%);
+
+    --shadow-glow: 0 0 40px hsla(0, 84%, 60%, 0.3);
+    --shadow-intense: 0 0 60px hsla(0, 100%, 50%, 0.5);
+    --shadow-card: 0 10px 40px hsla(0, 0%, 0%, 0.6);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Light mode: disable ALL blur effects globally for a crisp, professional look. */
+  html:not(.dark) *,
+  html:not(.dark) *::before,
+  html:not(.dark) *::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  html:not(.dark) [class*="blur-"]:not([class*="backdrop-blur"]) {
+    filter: none !important;
+  }
+  /* Replace translucent surfaces (commonly paired with backdrop-blur) with solid tokens */
+  html:not(.dark) [class*="backdrop-blur"][class*="bg-background/"],
+  html:not(.dark) [class*="backdrop-blur"][class*="bg-card/"],
+  html:not(.dark) [class*="backdrop-blur"][class*="bg-secondary/"],
+  html:not(.dark) [class*="backdrop-blur"][class*="bg-popover/"],
+  html:not(.dark) [class*="backdrop-blur"][class*="bg-muted/"] {
+    background-color: hsl(var(--background)) !important;
+  }
+}
+
+/* === Red glow pulse animation for buttons === */
+@layer utilities {
+  @keyframes red-glow-pulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 hsla(var(--primary) / 0.55),
+                  0 0 12px 0 hsla(var(--primary) / 0.35);
+    }
+    50% {
+      box-shadow: 0 0 0 6px hsla(var(--primary) / 0),
+                  0 0 22px 4px hsla(var(--primary) / 0.55);
+    }
+  }
+  .btn-red-glow {
+    animation: red-glow-pulse 2.4s ease-in-out infinite;
+  }
+  .btn-red-glow:hover {
+    animation-duration: 1.2s;
+  }
+
+  .perspective-hero {
+    perspective: 1200px;
+  }
+
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+
+  .auto-perspective {
+    perspective: 1400px;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
