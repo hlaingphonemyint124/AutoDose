@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Camera, ChevronDown, Film, Pause, Play } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { motion, AnimatePresence, useMotionValue, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { ArrowRight, ChevronDown, Film, Pause, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { hasSupabaseConfig, supabase } from "@/integrations/supabase/client";
-import { getYouTubeFallbackThumbnail, getYouTubeThumbnail } from "@/lib/youtube";
+import { getYouTubeEmbedUrl, getYouTubeFallbackThumbnail, getYouTubeThumbnail, isYouTubeVideo } from "@/lib/youtube";
 import heroImage from "@/assets/hero-jdm.jpg";
 
 interface FeaturedVideo {
@@ -40,11 +40,90 @@ const getPoster = (video: FeaturedVideo) =>
   getYouTubeThumbnail(video.youtube_video_id || video.youtube_url || video.storage_url) ||
   heroImage;
 
+const HeroMotionBackground = ({
+  video,
+  poster,
+  reduceMotion,
+}: {
+  video: FeaturedVideo;
+  poster: string;
+  reduceMotion: boolean;
+}) => {
+  const youtubeEmbed = isYouTubeVideo(video)
+    ? getYouTubeEmbedUrl(video.youtube_video_id || video.youtube_url || video.storage_url, {
+        autoplay: true,
+        muted: true,
+        controls: false,
+        loop: true,
+      })
+    : null;
+  const directVideo = !youtubeEmbed ? video.hls_url || video.storage_url : null;
+
+  if (youtubeEmbed && !reduceMotion) {
+    return (
+      <iframe
+        key={`yt-${video.id}`}
+        src={youtubeEmbed}
+        title={`${video.title} autoplay background`}
+        className="hero-video-embed"
+        allow="autoplay; encrypted-media; picture-in-picture"
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+    );
+  }
+
+  if (directVideo && !reduceMotion) {
+    return (
+      <video
+        key={`video-${video.id}`}
+        className="absolute inset-0 h-full w-full object-cover"
+        src={directVideo}
+        poster={poster}
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        aria-hidden="true"
+      />
+    );
+  }
+
+  return (
+    <img
+      key={`poster-${video.id}`}
+      src={poster}
+      alt=""
+      className="absolute inset-0 h-full w-full object-cover"
+      aria-hidden="true"
+    />
+  );
+};
+
 const FeaturedHero = ({ onPlay }: Props) => {
+  const sectionRef = useRef<HTMLElement>(null);
   const [videos, setVideos] = useState<FeaturedVideo[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [paused, setPaused] = useState(false);
+  const reduceMotion = useReducedMotion();
+  const pointerX = useMotionValue(0);
+  const pointerY = useMotionValue(0);
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ["start start", "end start"],
+    layoutEffect: false,
+  });
+
+  const heroScale = useTransform(scrollYProgress, [0, 1], [1.08, 1.18]);
+  const heroY = useTransform(scrollYProgress, [0, 1], [0, 130]);
+  const copyY = useTransform(scrollYProgress, [0, 1], [0, -58]);
+  const copyOpacity = useTransform(scrollYProgress, [0, 0.72], [1, 0]);
+  const rotateX = useTransform(pointerY, [-1, 1], reduceMotion ? [0, 0] : [4, -4]);
+  const rotateY = useTransform(pointerX, [-1, 1], reduceMotion ? [0, 0] : [-7, 7]);
+  const lightX = useTransform(pointerX, [-1, 1], reduceMotion ? [0, 0] : [-18, 18]);
+  const lightY = useTransform(pointerY, [-1, 1], reduceMotion ? [0, 0] : [-10, 10]);
 
   const slides = videos.length ? videos : [fallbackSlide];
   const active = slides[activeIndex] ?? slides[0];
@@ -89,12 +168,28 @@ const FeaturedHero = ({ onPlay }: Props) => {
   }, [paused, slides.length]);
 
   const handlePlay = () => {
-    if (active.id !== fallbackSlide.id) onPlay(active);
+    if (active.id !== fallbackSlide.id) {
+      onPlay(active);
+      return;
+    }
+    document.getElementById("latest-releases")?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handlePointerMove = (event: PointerEvent<HTMLElement>) => {
+    if (reduceMotion) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    pointerX.set(((event.clientX - rect.left) / rect.width - 0.5) * 2);
+    pointerY.set(((event.clientY - rect.top) / rect.height - 0.5) * 2);
+  };
+
+  const handlePointerLeave = () => {
+    pointerX.set(0);
+    pointerY.set(0);
   };
 
   if (loading) {
     return (
-      <section className="relative h-[86vh] min-h-[640px] bg-card animate-pulse overflow-hidden">
+      <section ref={sectionRef} className="relative h-[86vh] min-h-[640px] bg-card animate-pulse overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
       </section>
     );
@@ -102,44 +197,64 @@ const FeaturedHero = ({ onPlay }: Props) => {
 
   return (
     <section
-      className="relative min-h-[720px] h-[92vh] w-full overflow-hidden bg-black text-white"
+      ref={sectionRef}
+      onPointerMove={handlePointerMove}
+      onPointerLeave={handlePointerLeave}
+      className="relative min-h-[900px] w-full overflow-hidden bg-black text-white sm:min-h-[760px] lg:h-[92svh] lg:min-h-[720px]"
     >
       <AnimatePresence mode="sync">
-        <motion.img
+        <motion.div
           key={active.id}
-          src={poster}
-          alt={active.title}
-          onError={(event) => {
-            const fallback = getYouTubeFallbackThumbnail(active.youtube_video_id || active.youtube_url || active.storage_url);
-            if (fallback && event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
-          }}
           initial={{ opacity: 0, scale: 1.12 }}
-          animate={{ opacity: 1, scale: 1.06, y: [0, -10, 0] }}
+          animate={{ opacity: 1, scale: reduceMotion ? 1.04 : 1.08, y: reduceMotion ? 0 : [0, -10, 0] }}
           exit={{ opacity: 0, scale: 1.02 }}
-          transition={{ duration: 8, ease: "easeInOut" }}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+          transition={{ duration: reduceMotion ? 0.8 : 8, ease: "easeInOut" }}
+          style={{ scale: heroScale, y: heroY }}
+          className="hero-cinematic-backdrop absolute inset-[-5%] overflow-hidden will-change-transform"
+        >
+          <HeroMotionBackground video={active} poster={poster} reduceMotion={!!reduceMotion} />
+          <img
+            src={poster}
+            alt=""
+            onError={(event) => {
+              const fallback = getYouTubeFallbackThumbnail(active.youtube_video_id || active.youtube_url || active.storage_url);
+              if (fallback && event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
+            }}
+            className="absolute inset-0 h-full w-full object-cover opacity-20 mix-blend-screen"
+            aria-hidden="true"
+          />
+        </motion.div>
       </AnimatePresence>
 
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_32%,rgba(255,255,255,0.12),transparent_28%),linear-gradient(90deg,rgba(0,0,0,0.92),rgba(0,0,0,0.38)_52%,rgba(0,0,0,0.7))]" />
-      <div className="absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-background via-background/70 to-transparent" />
-      <div className="absolute inset-0 opacity-[0.08] bg-[linear-gradient(90deg,white_1px,transparent_1px),linear-gradient(180deg,white_1px,transparent_1px)] bg-[size:72px_72px]" />
+      <motion.div
+        aria-hidden="true"
+        style={{ x: lightX, y: lightY }}
+        className="absolute inset-0 opacity-60"
+      >
+        <div className="absolute left-[-8%] top-[18%] h-[2px] w-[42%] rotate-[-14deg] bg-gradient-to-r from-transparent via-primary/80 to-transparent blur-[1px]" />
+        <div className="absolute right-[-10%] top-[40%] h-[1px] w-[50%] rotate-[-14deg] bg-gradient-to-r from-transparent via-white/45 to-transparent" />
+        <div className="absolute bottom-[22%] left-[6%] h-[1px] w-[36%] rotate-[-14deg] bg-gradient-to-r from-transparent via-primary/55 to-transparent" />
+      </motion.div>
 
-      <div className="relative z-10 mx-auto flex h-full max-w-7xl items-center px-4 pt-20 sm:px-6 lg:px-8">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_32%,rgba(255,255,255,0.12),transparent_28%),linear-gradient(90deg,rgba(0,0,0,0.93),rgba(0,0,0,0.48)_50%,rgba(0,0,0,0.76))]" />
+      <div className="absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-background via-background/78 to-transparent" />
+
+      <div className="relative z-10 mx-auto flex min-h-[900px] max-w-7xl items-center px-4 pb-28 pt-24 sm:min-h-[760px] sm:px-6 lg:h-full lg:min-h-[720px] lg:px-8 lg:pb-20">
         <motion.div
           initial={{ opacity: 0, y: 22 }}
           animate={{ opacity: 1, y: 0 }}
+          style={{ y: copyY, opacity: copyOpacity }}
           transition={{ duration: 0.8, ease: "easeOut" }}
-          className="grid w-full items-center gap-10 lg:grid-cols-[1fr_420px]"
+          className="grid w-full items-center gap-7 sm:gap-10 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_420px]"
         >
-          <div className="max-w-3xl space-y-7">
+          <div className="max-w-3xl space-y-5 sm:space-y-7">
             <motion.div
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7 }}
-              className="flex flex-wrap items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.32em] text-primary"
+              className="flex flex-wrap items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-primary sm:text-[11px] sm:tracking-[0.32em]"
             >
-              <span className="h-px w-12 bg-primary" />
+              <span className="h-px w-10 bg-primary sm:w-12" />
               <span>Featured {active.category ? `· ${active.category}` : "Production"}</span>
             </motion.div>
 
@@ -152,10 +267,10 @@ const FeaturedHero = ({ onPlay }: Props) => {
                 transition={{ duration: 0.55, ease: "easeOut" }}
                 className="space-y-5"
               >
-                <h1 className="max-w-4xl text-4xl font-bold leading-[0.95] tracking-normal text-white sm:text-6xl lg:text-7xl xl:text-8xl font-orbitron">
+                <h1 className="max-w-4xl text-3xl font-bold leading-[1.04] tracking-normal text-white sm:text-5xl lg:text-5xl xl:text-6xl 2xl:text-7xl font-orbitron">
                   {active.title}
                 </h1>
-                <p className="max-w-2xl text-base leading-7 text-white/76 sm:text-lg">
+                <p className="max-w-2xl text-sm leading-6 text-white/76 sm:text-lg sm:leading-7">
                   {active.description ||
                     "Cinematic automotive photography and videography built for launches, meets, builds, and stories that deserve more than a quick scroll."}
                 </p>
@@ -166,7 +281,6 @@ const FeaturedHero = ({ onPlay }: Props) => {
               <Button
                 size="lg"
                 onClick={handlePlay}
-                disabled={active.id === fallbackSlide.id}
                 className="h-12 rounded-md bg-primary px-6 font-semibold text-primary-foreground shadow-glow hover:bg-primary/90"
               >
                 <Play className="mr-2" size={18} fill="currentColor" />
@@ -183,24 +297,25 @@ const FeaturedHero = ({ onPlay }: Props) => {
               </Button>
             </div>
 
-            <div className="grid max-w-2xl grid-cols-3 gap-3 pt-4 text-white/80">
+            <div className="grid max-w-2xl grid-cols-3 gap-2 pt-1 text-white/80 sm:gap-3 sm:pt-2">
               {[
                 ["4K", "Visual-ready edits"],
                 ["JDM", "Culture stories"],
                 ["Photo", "Editorial shoots"],
               ].map(([value, label]) => (
-                <div key={value} className="border-l border-white/18 pl-4">
-                  <div className="font-orbitron text-2xl font-bold text-white">{value}</div>
-                  <div className="mt-1 text-xs uppercase tracking-[0.18em] text-white/52">{label}</div>
+                <div key={value} className="border-l border-white/18 pl-3 sm:pl-4">
+                  <div className="font-orbitron text-xl font-bold text-white sm:text-2xl">{value}</div>
+                  <div className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/52 sm:text-xs sm:tracking-[0.18em]">{label}</div>
                 </div>
               ))}
             </div>
           </div>
 
           <motion.div
-            className="hidden perspective-hero lg:block"
+            className="perspective-hero mx-auto w-full max-w-[320px] sm:max-w-[380px] lg:block lg:max-w-[360px] xl:max-w-none"
             initial={{ opacity: 0, x: 34 }}
             animate={{ opacity: 1, x: 0, rotateY: -6 }}
+            style={{ rotateX, rotateY }}
             transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
           >
             <div className="relative preserve-3d">
@@ -213,7 +328,7 @@ const FeaturedHero = ({ onPlay }: Props) => {
                     const fallback = getYouTubeFallbackThumbnail(active.youtube_video_id || active.youtube_url || active.storage_url);
                     if (fallback && event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
                   }}
-                  className="aspect-[4/5] w-full object-cover"
+                  className="aspect-[16/10] w-full object-cover lg:aspect-[4/5]"
                   aria-hidden="true"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
@@ -231,7 +346,7 @@ const FeaturedHero = ({ onPlay }: Props) => {
       </div>
 
       {slides.length > 1 && (
-        <div className="absolute bottom-24 right-4 z-20 flex items-center gap-3 sm:right-6 lg:right-10">
+        <div className="absolute bottom-20 right-4 z-20 flex items-center gap-3 sm:right-6 lg:bottom-24 lg:right-10">
           <button
             onClick={() => setPaused((current) => !current)}
             className="grid h-10 w-10 place-items-center rounded-full border border-white/20 bg-black/30 text-white transition hover:border-primary hover:text-primary"
@@ -266,10 +381,6 @@ const FeaturedHero = ({ onPlay }: Props) => {
         </motion.div>
       </motion.div>
 
-      <div className="absolute bottom-8 left-4 z-20 hidden items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/50 sm:left-6 lg:left-10 lg:flex">
-        <Camera size={15} className="text-primary" />
-        No background streaming · poster slideshow
-      </div>
     </section>
   );
 };

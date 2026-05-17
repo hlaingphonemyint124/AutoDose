@@ -142,7 +142,7 @@ const HomeVideoRows = ({ externalSelected, onCloseExternal, afterLatestSlot }: P
     : null;
 
   return (
-    <div className="bg-background relative z-10 -mt-16 md:-mt-24 space-y-2 md:space-y-4 pb-8 md:pb-12">
+    <div className="bg-background relative z-10 -mt-8 md:-mt-14 space-y-2 md:space-y-4 pb-8 md:pb-12">
       {continueWatching.length > 0 && (
         <VideoRow title="Continue Watching" videos={continueWatching} onSelect={handleSelect} />
       )}

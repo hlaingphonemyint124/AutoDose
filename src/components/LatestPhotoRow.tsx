@@ -29,7 +29,7 @@ const LatestPhotoRow = ({ title, photos }: Props) => {
   };
 
   return (
-    <section className="py-8 group/row">
+    <section className="group/row py-8">
       <div className="px-4 md:px-12 mb-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Camera className="text-primary" size={20} />
@@ -45,7 +45,7 @@ const LatestPhotoRow = ({ title, photos }: Props) => {
         </Link>
       </div>
 
-      <div className="relative">
+      <div className="relative auto-perspective">
         {/* Left arrow */}
         <button
           onClick={() => scroll("left")}
@@ -57,7 +57,7 @@ const LatestPhotoRow = ({ title, photos }: Props) => {
 
         <div
           ref={scrollerRef}
-          className="flex gap-4 overflow-x-auto scroll-smooth px-4 md:px-12 pb-4 scrollbar-hide"
+          className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth px-4 pb-5 scrollbar-hide md:px-12"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           {photos.map((photo, i) => (
@@ -67,20 +67,23 @@ const LatestPhotoRow = ({ title, photos }: Props) => {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: Math.min(i * 0.05, 0.3) }}
-              whileHover={{ scale: 1.06, y: -4, zIndex: 5 }}
-              className="relative flex-shrink-0 w-[200px] md:w-[280px] aspect-[4/5] rounded-lg overflow-hidden cursor-pointer bg-card border border-border shadow-card group/card"
+              whileHover={{ scale: 1.04, y: -8, rotateX: 3, rotateY: i % 2 ? -4 : 4, zIndex: 5 }}
+              whileTap={{ scale: 0.98 }}
+              className="group/card relative aspect-[4/5] w-[200px] flex-shrink-0 snap-start cursor-pointer overflow-hidden rounded-md border border-border bg-card shadow-card transform-gpu transition-colors duration-300 hover:border-primary/55 md:w-[280px]"
             >
               <Link to="/gallery" className="block w-full h-full">
                 <img
                   src={photo.storage_url}
                   alt={photo.title}
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover/card:scale-110"
+                  className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover/card:scale-110"
                 />
 
                 {/* Hover overlay - dark vignette */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/26 to-transparent opacity-85 transition-opacity md:opacity-0 md:group-hover/card:opacity-100" />
+                <div className="absolute left-3 top-3 h-8 w-8 border-l border-t border-white/50 opacity-0 transition md:group-hover/card:opacity-100" />
+                <div className="absolute bottom-3 right-3 h-8 w-8 border-b border-r border-primary/75 opacity-0 transition md:group-hover/card:opacity-100" />
 
-                <div className="absolute bottom-0 left-0 right-0 p-3 opacity-0 group-hover/card:opacity-100 transition-opacity">
+                <div className="absolute bottom-0 left-0 right-0 p-3 opacity-100 transition-opacity md:opacity-0 md:group-hover/card:opacity-100">
                   <h3 className="text-sm md:text-base font-semibold text-white line-clamp-2 drop-shadow-md">
                     {photo.title}
                   </h3>
