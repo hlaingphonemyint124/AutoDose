@@ -60,16 +60,33 @@ const HeroMotionBackground = ({
   const directVideo = !youtubeEmbed ? video.hls_url || video.storage_url : null;
 
   if (youtubeEmbed && !reduceMotion) {
+    // YouTube renders its pause/play/prev/next overlay at the iframe center.
+    // Push the iframe 10% beyond each edge — those controls are cropped outside
+    // the overflow:hidden container while the video content remains fully visible.
     return (
-      <iframe
-        key={`yt-${video.id}`}
-        src={youtubeEmbed}
-        title={`${video.title} autoplay background`}
-        className="hero-video-embed"
-        allow="autoplay; encrypted-media; picture-in-picture"
+      <div
+        key={`yt-wrap-${video.id}`}
+        className="absolute inset-0 overflow-hidden"
         aria-hidden="true"
-        tabIndex={-1}
-      />
+      >
+        <iframe
+          src={youtubeEmbed + "&disablekb=1&iv_load_policy=3&fs=0"}
+          title=""
+          allow="autoplay; encrypted-media"
+          tabIndex={-1}
+          style={{
+            position: "absolute",
+            top: "-10%",
+            left: "-10%",
+            width: "120%",
+            height: "120%",
+            border: 0,
+            pointerEvents: "none",
+          }}
+        />
+        {/* Invisible capture layer — no mouse events reach the iframe */}
+        <div className="absolute inset-0" style={{ pointerEvents: "all" }} />
+      </div>
     );
   }
 
@@ -276,16 +293,6 @@ const FeaturedHero = ({ onPlay }: Props) => {
           className="absolute inset-[-5%] overflow-hidden will-change-transform"
         >
           <HeroMotionBackground video={active} poster={poster} reduceMotion={!!reduceMotion} />
-          <img
-            src={poster}
-            alt=""
-            onError={(e) => {
-              const fb = getYouTubeFallbackThumbnail(active.youtube_video_id || active.youtube_url || active.storage_url);
-              if (fb && (e.target as HTMLImageElement).src !== fb) (e.target as HTMLImageElement).src = fb;
-            }}
-            className="absolute inset-0 h-full w-full object-cover opacity-15 mix-blend-screen"
-            aria-hidden="true"
-          />
         </motion.div>
       </div>
 
@@ -308,7 +315,7 @@ const FeaturedHero = ({ onPlay }: Props) => {
           animate={{ opacity: 1, y: 0 }}
           style={{ y: copyY, opacity: copyOpacity }}
           transition={{ duration: 0.9, ease: "easeOut" }}
-          className="grid w-full items-center gap-7 sm:gap-10 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_420px]"
+          className="grid w-full items-center gap-8 sm:gap-12 lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_380px]"
         >
           {/* Left copy */}
           <div className="max-w-3xl space-y-5 sm:space-y-7">
@@ -393,49 +400,60 @@ const FeaturedHero = ({ onPlay }: Props) => {
             </motion.div>
           </div>
 
-          {/* Right: 3D poster card */}
+          {/* Right: premium video card */}
           <motion.div
-            className="perspective-hero mx-auto w-full max-w-[320px] sm:max-w-[380px] lg:block lg:max-w-[360px] xl:max-w-none"
-            initial={{ opacity: 0, x: 40 }}
+            className="hidden lg:block w-full"
+            initial={{ opacity: 0, x: 32 }}
             animate={{ opacity: 1, x: 0 }}
-            style={{ rotateX, rotateY }}
-            transition={{ duration: 0.9, delay: 0.28, ease: "easeOut" }}
+            transition={{ duration: 0.9, delay: 0.3, ease: "easeOut" }}
           >
             <AnimatePresence mode="wait">
               <motion.div
                 key={active.id + "-card"}
-                initial={{ opacity: 0, scale: 0.92, y: 18 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 1.05, y: -12 }}
-                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                className="relative preserve-3d"
+                initial={{ opacity: 0, x: 30, scale: 0.96, filter: "blur(6px)" }}
+                animate={{ opacity: 1, x: 0, scale: 1, filter: "blur(0px)" }}
+                exit={{ opacity: 0, x: -30, scale: 0.96, filter: "blur(6px)" }}
+                transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
               >
-                <div className="absolute -inset-6 translate-x-6 translate-y-6 rotate-2 rounded-md border border-white/8 bg-white/4" />
-                <div className="relative overflow-hidden rounded-md border border-white/16 bg-white/8 shadow-2xl ring-1 ring-white/5">
-                  <img
-                    src={poster}
-                    alt=""
-                    onError={(e) => {
-                      const fb = getYouTubeFallbackThumbnail(active.youtube_video_id || active.youtube_url || active.storage_url);
-                      if (fb && (e.target as HTMLImageElement).src !== fb) (e.target as HTMLImageElement).src = fb;
-                    }}
-                    className="aspect-[16/10] w-full object-cover lg:aspect-[4/5] transition-transform duration-700 hover:scale-105"
-                    aria-hidden="true"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/88 via-transparent to-transparent" />
-                  {/* Scan line */}
-                  <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                    <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent cinematic-scan" />
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 p-5">
-                    <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-white/55">
-                      <Film size={13} />
-                      <span>{active.category || "Featured"}</span>
+                {/* Outer red-glow border frame */}
+                <div className="relative rounded-xl p-[1.5px]"
+                  style={{ background: "linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary)/0.4) 50%, transparent 100%)", boxShadow: "0 0 28px rgba(220,38,38,0.35), 0 0 60px rgba(220,38,38,0.12), 0 8px 40px rgba(0,0,0,0.8)" }}
+                >
+                  <div className="rounded-[10px] overflow-hidden bg-black">
+                    {/* Thumbnail — full clean, no shade */}
+                    <div className="relative overflow-hidden">
+                      <img
+                        src={poster}
+                        alt=""
+                        onError={(e) => {
+                          const fb = getYouTubeFallbackThumbnail(active.youtube_video_id || active.youtube_url || active.storage_url);
+                          if (fb && (e.target as HTMLImageElement).src !== fb) (e.target as HTMLImageElement).src = fb;
+                        }}
+                        className="aspect-video w-full object-cover transition-transform duration-700 hover:scale-[1.03]"
+                        aria-hidden="true"
+                      />
+                      {/* Top red bar */}
+                      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary via-primary/70 to-transparent" />
                     </div>
-                    <p className="line-clamp-2 font-orbitron text-lg font-bold text-white leading-tight">{active.title}</p>
-                    {active.duration && (
-                      <span className="mt-1 inline-block text-[10px] text-white/45 tracking-wider">{active.duration}</span>
-                    )}
+
+                    {/* Info panel */}
+                    <div className="px-4 py-3 space-y-1.5 bg-zinc-950/90">
+                      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-primary">
+                        <Film size={10} />
+                        <span>{active.category || "Featured"}</span>
+                        {active.duration && (
+                          <span className="ml-auto text-white/35 normal-case tracking-normal font-normal">{active.duration}</span>
+                        )}
+                      </div>
+                      <p className="line-clamp-2 font-orbitron text-[14px] font-bold text-white leading-snug tracking-wide">
+                        {active.title}
+                      </p>
+                      {active.description && (
+                        <p className="line-clamp-1 text-[11px] text-white/40 leading-relaxed">
+                          {active.description}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </motion.div>
