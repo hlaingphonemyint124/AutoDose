@@ -11,30 +11,24 @@ import Footer from "@/components/Footer";
 import CinematicShowcase from "@/components/CinematicShowcase";
 import { RowVideo } from "@/components/VideoRow";
 
-// Animated divider between sections
-const SectionDivider = ({ label }: { label?: string }) => (
+// Slim animated divider between sections
+const SectionDivider = () => (
   <motion.div
     initial={{ opacity: 0 }}
     whileInView={{ opacity: 1 }}
     viewport={{ once: true }}
     transition={{ duration: 0.6 }}
-    className="relative flex items-center gap-4 px-4 md:px-12 py-1"
+    className="relative h-px mx-6 sm:mx-10 lg:mx-16 my-2 overflow-hidden"
   >
-    <div className="flex-1 h-px bg-border relative overflow-hidden">
-      <motion.div
-        initial={{ scaleX: 0, originX: 0 }}
-        whileInView={{ scaleX: 1 }}
-        viewport={{ once: true }}
-        transition={{ duration: 1.2, ease: "easeOut", delay: 0.2 }}
-        className="absolute inset-0 h-px bg-gradient-to-r from-primary/60 via-primary/30 to-transparent"
-      />
-    </div>
-    {label && (
-      <span className="text-[10px] font-orbitron uppercase tracking-[0.25em] text-muted-foreground/60 flex-shrink-0">
-        {label}
-      </span>
-    )}
-    <div className="flex-1 h-px bg-border" />
+    <div className="absolute inset-0 bg-border" />
+    <motion.div
+      initial={{ scaleX: 0 }}
+      whileInView={{ scaleX: 1 }}
+      viewport={{ once: true }}
+      transition={{ duration: 1.4, ease: "easeOut", delay: 0.15 }}
+      style={{ transformOrigin: "left center" }}
+      className="absolute inset-0 bg-gradient-to-r from-primary/55 via-primary/25 to-transparent"
+    />
   </motion.div>
 );
 
@@ -59,27 +53,31 @@ const Index = () => {
         }}
       />
 
-      {/* Sticky scroll progress indicator */}
       <ScrollProgressBar />
       <Navbar />
 
-      {/* Video Hero — full bleed */}
+      {/* Video Hero — full bleed, thumbnails as background */}
       <FeaturedHero onPlay={(v) => setHeroSelected(v as RowVideo)} />
 
       <main>
-        {/* Latest Releases */}
-        <div id="latest-releases" className="pt-2">
+        {/*
+          Latest Releases section has been removed from here.
+          Videos are now browsable via the hero filmstrip and the Videos page.
+          The HomeVideoRows below handles modal playback when a hero card is clicked.
+        */}
+        <div id="video-rows" className="pt-0">
           <HomeVideoRows
             externalSelected={heroSelected}
             onCloseExternal={() => setHeroSelected(null)}
+            hideLatestRow
           />
         </div>
 
-        <SectionDivider label="Cinematic" />
+        <SectionDivider />
 
         <CinematicShowcase />
 
-        <SectionDivider label="Photography" />
+        <SectionDivider />
 
         {/* Photo Hero slideshow */}
         <PhotoHero />
