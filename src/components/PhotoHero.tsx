@@ -78,7 +78,7 @@ const PhotoHero = () => {
 
   if (loading) {
     return (
-      <div className="relative h-[55vh] md:h-[85vh] bg-zinc-950 overflow-hidden">
+      <div className="relative h-[88svh] min-h-[680px] max-h-[920px] bg-zinc-950 overflow-hidden">
         <div className="absolute inset-0 shimmer opacity-30" />
         <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent" />
       </div>
@@ -89,7 +89,7 @@ const PhotoHero = () => {
   const current = photos[index];
 
   return (
-    <section className="relative h-[60vh] md:h-[88vh] w-full overflow-hidden bg-black">
+    <section className="relative h-[88svh] min-h-[680px] max-h-[920px] w-full overflow-hidden bg-black">
       {/* Previous photo fading out */}
       <AnimatePresence>
         {prevIndex !== null && prevIndex !== index && photos[prevIndex] && (
@@ -132,7 +132,7 @@ const PhotoHero = () => {
       <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/40 to-transparent" />
 
       {/* Content */}
-      <div className="relative z-10 h-full flex items-end pb-14 md:pb-28 px-4 sm:px-6 md:px-12">
+      <div className="relative z-10 h-full flex items-end pb-24 md:pb-28 px-4 sm:px-6 md:px-12">
         <AnimatePresence mode="wait">
           <motion.div
             key={current.id + "-text"}

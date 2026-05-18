@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, Trash2 } from "lucide-react";
-import { getYouTubeThumbnail, getYouTubeVideoId } from "@/lib/youtube";
+import { getVideoSourceType, getYouTubeThumbnail, getYouTubeVideoId } from "@/lib/youtube";
 
 interface EditVideoDialogProps {
   video: any;
@@ -76,7 +76,9 @@ export const EditVideoDialog = ({ video, open, onOpenChange, onSuccess }: EditVi
         parsed.push({ time: t, title: c.title.trim() });
       }
       parsed.sort((a, b) => a.time - b.time);
+      const videoSourceType = getVideoSourceType(youtubeUrl);
       const youtubeVideoId = getYouTubeVideoId(youtubeUrl);
+      const isExternalVideo = videoSourceType === "youtube" || videoSourceType === "facebook";
 
       const { error } = await supabase
         .from("videos")
@@ -84,10 +86,10 @@ export const EditVideoDialog = ({ video, open, onOpenChange, onSuccess }: EditVi
           title,
           category,
           description: description || null,
-          source_type: youtubeVideoId ? "youtube" : video.source_type || "file",
-          youtube_url: youtubeVideoId ? youtubeUrl.trim() : null,
-          youtube_video_id: youtubeVideoId,
-          storage_url: youtubeVideoId ? youtubeUrl.trim() : video.storage_url,
+          source_type: videoSourceType || video.source_type || "file",
+          youtube_url: videoSourceType === "youtube" ? youtubeUrl.trim() : null,
+          youtube_video_id: videoSourceType === "youtube" ? youtubeVideoId : null,
+          storage_url: isExternalVideo ? youtubeUrl.trim() : video.storage_url,
           thumbnail_url: thumbnailUrl.trim() || (youtubeVideoId ? getYouTubeThumbnail(youtubeVideoId) : null),
           hls_url: hlsUrl.trim() || null,
           chapters: parsed as any,
@@ -148,10 +150,10 @@ export const EditVideoDialog = ({ video, open, onOpenChange, onSuccess }: EditVi
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="edit-video-youtube">YouTube URL</Label>
+            <Label htmlFor="edit-video-youtube">Video URL</Label>
             <Input
               id="edit-video-youtube"
-              placeholder="https://www.youtube.com/watch?v=..."
+              placeholder="YouTube or Facebook video link"
               value={youtubeUrl}
               onChange={(e) => setYoutubeUrl(e.target.value)}
               className="bg-background border-border"
@@ -161,7 +163,7 @@ export const EditVideoDialog = ({ video, open, onOpenChange, onSuccess }: EditVi
             <Label htmlFor="edit-video-thumbnail">Thumbnail URL</Label>
             <Input
               id="edit-video-thumbnail"
-              placeholder="Leave blank to use YouTube thumbnail"
+              placeholder="Recommended for Facebook, optional for YouTube"
               value={thumbnailUrl}
               onChange={(e) => setThumbnailUrl(e.target.value)}
               className="bg-background border-border"

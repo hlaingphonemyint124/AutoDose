@@ -4,7 +4,7 @@ import { Play, Heart, ArrowRight, Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { getYouTubeEmbedUrl, getYouTubeFallbackThumbnail, getYouTubeThumbnail, isYouTubeVideo } from "@/lib/youtube";
+import { getVideoEmbedUrl, getYouTubeFallbackThumbnail, getYouTubeThumbnail, isEmbeddedVideo } from "@/lib/youtube";
 
 interface Video {
   id: string;
@@ -68,7 +68,7 @@ const LatestVideosSection = () => {
         <div className={`grid gap-6 ${videos.length === 1 ? "grid-cols-1 max-w-2xl mx-auto" : videos.length === 2 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 md:grid-cols-3"}`}>
           {videos.map((video, index) => {
             const thumb = video.thumbnail_url || getYouTubeThumbnail(video.youtube_video_id || video.youtube_url || video.storage_url);
-            const youtubeEmbedUrl = getYouTubeEmbedUrl(video.youtube_video_id || video.youtube_url || video.storage_url, {
+            const embeddedUrl = getVideoEmbedUrl(video, {
               autoplay: true,
               controls: true,
             });
@@ -84,12 +84,12 @@ const LatestVideosSection = () => {
               {/* Video / Thumbnail */}
               <div className="relative aspect-video overflow-hidden bg-secondary">
                 {playingId === video.id ? (
-                  isYouTubeVideo(video) && youtubeEmbedUrl ? (
+                  isEmbeddedVideo(video) && embeddedUrl ? (
                     <iframe
-                      src={youtubeEmbedUrl}
+                      src={embeddedUrl}
                       title={video.title}
                       className="w-full h-full border-0"
-                      allow="autoplay; encrypted-media; picture-in-picture"
+                      allow="autoplay; encrypted-media; picture-in-picture; clipboard-write"
                       allowFullScreen
                     />
                   ) : (

@@ -20,7 +20,7 @@ import { ActivityFeed } from "@/components/ActivityFeed";
 import { BulkOperations } from "@/components/BulkOperations";
 import { UserAnalyticsDashboard } from "@/components/UserAnalyticsDashboard";
 import { StoriesManagement } from "@/components/StoriesManagement";
-import { getYouTubeThumbnail, getYouTubeVideoId } from "@/lib/youtube";
+import { getVideoSourceType, getYouTubeThumbnail, getYouTubeVideoId } from "@/lib/youtube";
 
 
 const AdminDashboard = () => {
@@ -58,6 +58,7 @@ const AdminDashboard = () => {
   const [allPhotos, setAllPhotos] = useState<any[]>([]);
   const [allVideos, setAllVideos] = useState<any[]>([]);
   const [featureLoading, setFeatureLoading] = useState<string | null>(null);
+  const videoSourceType = getVideoSourceType(videoUrl);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -287,10 +288,11 @@ const AdminDashboard = () => {
   const handleVideoUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     const youtubeVideoId = getYouTubeVideoId(videoUrl);
-    if (!videoTitle || !youtubeVideoId) {
+    const sourceType = getVideoSourceType(videoUrl);
+    if (!videoTitle || !sourceType) {
       toast({
         title: "Missing Information",
-        description: "Please provide a title and a valid YouTube video URL",
+        description: "Please provide a title and a valid YouTube or Facebook video URL",
         variant: "destructive",
       });
       return;
@@ -303,7 +305,7 @@ const AdminDashboard = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
-      const thumbnailUrl = videoThumbnailUrl.trim() || getYouTubeThumbnail(youtubeVideoId);
+      const thumbnailUrl = videoThumbnailUrl.trim() || (youtubeVideoId ? getYouTubeThumbnail(youtubeVideoId) : null);
 
       const { error: dbError } = await supabase
         .from("videos")
@@ -312,9 +314,9 @@ const AdminDashboard = () => {
           title: videoTitle,
           description: videoDescription || null,
           category: videoCategory || "General",
-          source_type: "youtube",
-          youtube_url: videoUrl.trim(),
-          youtube_video_id: youtubeVideoId,
+          source_type: sourceType,
+          youtube_url: sourceType === "youtube" ? videoUrl.trim() : null,
+          youtube_video_id: sourceType === "youtube" ? youtubeVideoId : null,
           file_path: "",
           storage_url: videoUrl.trim(),
           thumbnail_url: thumbnailUrl,
@@ -324,7 +326,7 @@ const AdminDashboard = () => {
 
       toast({
         title: "Success!",
-        description: "YouTube video added successfully.",
+        description: `${sourceType === "facebook" ? "Facebook" : "YouTube"} video added successfully.`,
       });
 
       setVideoTitle("");
@@ -673,7 +675,7 @@ const AdminDashboard = () => {
                     <CardHeader>
                       <CardTitle className="text-foreground">Video Management</CardTitle>
                       <CardDescription>
-                        Add YouTube videos for the homepage hero slideshow and video gallery
+                        Add YouTube or Facebook videos for the homepage hero slideshow and video gallery
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -692,19 +694,26 @@ const AdminDashboard = () => {
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="video-url">YouTube Video URL *</Label>
+                            <Label htmlFor="video-url">Video URL *</Label>
                             <Input
                               id="video-url"
                               type="url"
                               value={videoUrl}
                               onChange={(e) => setVideoUrl(e.target.value)}
-                              placeholder="https://www.youtube.com/watch?v=..."
+                              placeholder="YouTube or Facebook video link"
                               className="bg-background border-border"
                               required
                             />
                             <p className="text-xs text-muted-foreground">
-                              Use a direct YouTube video, Shorts, Live, or youtu.be link. Channel pages cannot be embedded as a playable hero video.
+                              Use a direct YouTube video, Shorts, Live, youtu.be, or Facebook video link. Add a thumbnail URL for Facebook posts so the hero card looks premium.
                             </p>
+                            {videoUrl && (
+                              <p className="text-xs font-medium text-primary">
+                                {videoSourceType
+                                  ? `Detected ${videoSourceType === "facebook" ? "Facebook" : "YouTube"} video`
+                                  : "Paste a supported YouTube or Facebook video URL"}
+                              </p>
+                            )}
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="video-category">Category</Label>
@@ -735,17 +744,17 @@ const AdminDashboard = () => {
                               type="url"
                               value={videoThumbnailUrl}
                               onChange={(e) => setVideoThumbnailUrl(e.target.value)}
-                              placeholder="Leave blank to use YouTube thumbnail"
+                              placeholder="Recommended for Facebook, optional for YouTube"
                               className="bg-background border-border"
                             />
                           </div>
                           <Button
                             type="submit"
-                            disabled={!videoTitle || !getYouTubeVideoId(videoUrl) || isUploading}
+                            disabled={!videoTitle || !videoSourceType || isUploading}
                             className="bg-primary hover:bg-primary/90 w-full"
                           >
                             <Tv size={16} className="mr-2" />
-                            {isUploading ? "Saving..." : "Add YouTube Video"}
+                            {isUploading ? "Saving..." : "Add Video"}
                           </Button>
                         </form>
 
@@ -758,7 +767,7 @@ const AdminDashboard = () => {
                               className="flex items-center justify-center gap-3 p-6 bg-primary/10 rounded-lg border border-primary"
                             >
                               <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                              <span className="text-foreground font-medium">Saving YouTube video...</span>
+                              <span className="text-foreground font-medium">Saving video...</span>
                             </motion.div>
                           )}
                         </AnimatePresence>

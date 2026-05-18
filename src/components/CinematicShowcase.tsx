@@ -42,12 +42,12 @@ const CinematicShowcase = () => {
   const lineScale = useTransform(scrollYProgress, [0.08, 0.88], [0, 1]);
 
   return (
-    <section ref={sectionRef} className="relative overflow-hidden bg-background py-20 sm:py-28 lg:py-36">
+    <section ref={sectionRef} className="relative overflow-hidden bg-background py-14 sm:py-20 lg:py-24">
       <div className="absolute inset-0 bg-[linear-gradient(180deg,hsl(var(--background)),hsl(var(--secondary))/0.55_48%,hsl(var(--background)))]" />
       <div className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
 
       <div className="container relative mx-auto px-4">
-        <div className="grid items-center gap-12 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="grid items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
           <motion.div
             initial={{ opacity: 0, y: 28 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -135,7 +135,7 @@ const CinematicShowcase = () => {
           </div>
         </div>
 
-        <div className="mt-16 border-y border-border bg-foreground text-background">
+        <div className="mt-10 border-y border-border bg-foreground text-background">
           <div className="flex flex-col gap-5 px-4 py-8 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <MapPin className="text-primary" size={22} />

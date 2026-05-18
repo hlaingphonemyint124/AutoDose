@@ -22,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { getYouTubeEmbedUrl, isYouTubeVideo } from "@/lib/youtube";
+import { getVideoEmbedUrl, isEmbeddedVideo } from "@/lib/youtube";
 
 export interface Chapter {
   time: number; // seconds
@@ -86,16 +86,16 @@ const ProVideoPlayer = ({ video, videoRef, onEnded, upNextLabel, onUpNextClick }
   const [activeChapterIndex, setActiveChapterIndex] = useState<number | null>(null);
 
   const chapters: Chapter[] = Array.isArray(video.chapters) ? video.chapters : [];
-  const youtubeEmbedUrl = getYouTubeEmbedUrl(video.youtube_video_id || video.youtube_url || video.storage_url, {
+  const embeddedUrl = getVideoEmbedUrl(video, {
     autoplay: true,
     controls: true,
   });
-  const useYouTube = isYouTubeVideo(video) && !!youtubeEmbedUrl;
+  const useEmbed = isEmbeddedVideo(video) && !!embeddedUrl;
 
   // ---------- Source loading (HLS or MP4) ----------
   useEffect(() => {
     const v = videoRef.current;
-    if (!v || useYouTube) return;
+    if (!v || useEmbed) return;
 
     // Cleanup any previous HLS instance
     if (hlsRef.current) {
@@ -142,12 +142,12 @@ const ProVideoPlayer = ({ video, videoRef, onEnded, upNextLabel, onUpNextClick }
         hlsRef.current = null;
       }
     };
-  }, [video.id, video.hls_url, video.storage_url, videoRef, useYouTube]);
+  }, [video.id, video.hls_url, video.storage_url, videoRef, useEmbed]);
 
   // ---------- Video event listeners ----------
   useEffect(() => {
     const v = videoRef.current;
-    if (!v || useYouTube) return;
+    if (!v || useEmbed) return;
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     const onTime = () => {
@@ -176,7 +176,7 @@ const ProVideoPlayer = ({ video, videoRef, onEnded, upNextLabel, onUpNextClick }
       v.removeEventListener("volumechange", onVol);
       v.removeEventListener("ended", onEnd);
     };
-  }, [videoRef, onEnded, useYouTube]);
+  }, [videoRef, onEnded, useEmbed]);
 
   // Active chapter tracking
   useEffect(() => {
@@ -309,14 +309,14 @@ const ProVideoPlayer = ({ video, videoRef, onEnded, upNextLabel, onUpNextClick }
     return () => window.removeEventListener("keydown", onKey);
   }, [togglePlay, toggleMute, toggleFullscreen, skip, bumpControls, videoRef]);
 
-  if (useYouTube) {
+  if (useEmbed) {
     return (
       <div ref={containerRef} className="relative w-full h-full bg-black">
         <iframe
-          src={youtubeEmbedUrl}
+          src={embeddedUrl}
           title={video.title}
           className="absolute inset-0 h-full w-full border-0"
-          allow="autoplay; encrypted-media; picture-in-picture"
+          allow="autoplay; encrypted-media; picture-in-picture; clipboard-write"
           allowFullScreen
         />
       </div>

@@ -12,6 +12,8 @@ interface Props {
   externalSelected?: RowVideo | null;
   onCloseExternal?: () => void;
   afterLatestSlot?: React.ReactNode;
+  /** When true, hides the "Latest Releases" row (shown in hero filmstrip instead) */
+  hideLatestRow?: boolean;
 }
 
 interface FullVideo extends RowVideo {
@@ -22,7 +24,7 @@ interface FullVideo extends RowVideo {
   chapters?: Chapter[] | null;
 }
 
-const HomeVideoRows = ({ externalSelected, onCloseExternal, afterLatestSlot }: Props) => {
+const HomeVideoRows = ({ externalSelected, onCloseExternal, afterLatestSlot, hideLatestRow }: Props) => {
   const [allVideos, setAllVideos] = useState<FullVideo[]>([]);
   const [continueWatching, setContinueWatching] = useState<RowVideo[]>([]);
   const [selected, setSelected] = useState<FullVideo | null>(null);
@@ -142,16 +144,19 @@ const HomeVideoRows = ({ externalSelected, onCloseExternal, afterLatestSlot }: P
     : null;
 
   return (
-    <div className="bg-background relative z-10 -mt-8 md:-mt-14 space-y-2 md:space-y-4 pb-8 md:pb-12">
+    <div className="bg-background relative z-10 space-y-2 md:space-y-3 pb-3 md:pb-4">
       {continueWatching.length > 0 && (
         <VideoRow title="Continue Watching" videos={continueWatching} onSelect={handleSelect} />
       )}
 
-      <VideoRow
-        title="Latest Releases"
-        videos={allVideos.slice(0, 12)}
-        onSelect={handleSelect}
-      />
+      {!hideLatestRow && (
+        <VideoRow
+          title="Latest Releases"
+          videos={allVideos.slice(0, 12)}
+          onSelect={handleSelect}
+          variant="featured"
+        />
+      )}
 
       {afterLatestSlot && (
         <div className="my-8 md:my-12">

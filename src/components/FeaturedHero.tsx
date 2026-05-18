@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, useCallback, type PointerEvent } from "react";
 import { motion, AnimatePresence, useMotionValue, useReducedMotion, useScroll, useTransform, useSpring } from "framer-motion";
-import { ArrowRight, Film, Pause, Play } from "lucide-react";
+import { ArrowRight, Pause, Play, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { hasSupabaseConfig, supabase } from "@/integrations/supabase/client";
-import { getYouTubeEmbedUrl, getYouTubeFallbackThumbnail, getYouTubeThumbnail, isYouTubeVideo } from "@/lib/youtube";
+import { getVideoEmbedUrl, getYouTubeFallbackThumbnail, getYouTubeThumbnail, isEmbeddedVideo } from "@/lib/youtube";
 import heroImage from "@/assets/hero-jdm.jpg";
 
 interface FeaturedVideo {
@@ -49,55 +49,59 @@ const HeroMotionBackground = ({
   poster: string;
   reduceMotion: boolean;
 }) => {
-  const youtubeEmbed = isYouTubeVideo(video)
-    ? getYouTubeEmbedUrl(video.youtube_video_id || video.youtube_url || video.storage_url, {
-        autoplay: true,
-        muted: true,
-        controls: false,
-        loop: true,
-      })
-    : null;
-  const directVideo = !youtubeEmbed ? video.hls_url || video.storage_url : null;
-
-  if (youtubeEmbed && !reduceMotion) {
-    return (
-      <iframe
-        key={`yt-${video.id}`}
-        src={youtubeEmbed}
-        title={`${video.title} autoplay background`}
-        className="hero-video-embed"
-        allow="autoplay; encrypted-media; picture-in-picture"
-        aria-hidden="true"
-        tabIndex={-1}
-      />
-    );
-  }
-
-  if (directVideo && !reduceMotion) {
-    return (
-      <video
-        key={`video-${video.id}`}
-        className="absolute inset-0 h-full w-full object-cover"
-        src={directVideo}
-        poster={poster}
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="metadata"
-        aria-hidden="true"
-      />
-    );
-  }
+  const [imgSrc, setImgSrc] = useState(poster);
+  useEffect(() => { setImgSrc(poster); }, [poster]);
+  const embedUrl = getVideoEmbedUrl(video, {
+    autoplay: !reduceMotion,
+    muted: true,
+    controls: false,
+    loop: true,
+  });
+  const canAutoplayMedia = !reduceMotion && (embedUrl || video.storage_url);
 
   return (
-    <img
-      key={`poster-${video.id}`}
-      src={poster}
-      alt=""
-      className="absolute inset-0 h-full w-full object-cover"
-      aria-hidden="true"
-    />
+    <>
+      {!canAutoplayMedia && (
+        <img
+          key={`poster-${video.id}`}
+          src={imgSrc}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover hero-cinematic-backdrop"
+          aria-hidden="true"
+          onError={() => {
+            const fb =
+              getYouTubeFallbackThumbnail(
+                video.youtube_video_id || video.youtube_url || video.storage_url
+              ) || heroImage;
+            if (imgSrc !== fb) setImgSrc(fb);
+          }}
+        />
+      )}
+      {!reduceMotion && embedUrl && (
+        <iframe
+          key={`embed-bg-${video.id}`}
+          src={embedUrl}
+          title=""
+          className="hero-video-embed hero-cinematic-backdrop opacity-70"
+          allow="autoplay; encrypted-media; picture-in-picture"
+          aria-hidden="true"
+          tabIndex={-1}
+        />
+      )}
+      {!reduceMotion && !embedUrl && video.storage_url && (
+        <video
+          key={`native-bg-${video.id}`}
+          src={video.storage_url}
+          poster={poster}
+          muted
+          autoPlay
+          loop
+          playsInline
+          className="absolute inset-0 h-full w-full object-cover hero-cinematic-backdrop opacity-75"
+          aria-hidden="true"
+        />
+      )}
+    </>
   );
 };
 
@@ -203,7 +207,7 @@ const FeaturedHero = ({ onPlay }: Props) => {
 
   const handlePlay = () => {
     if (active.id !== fallbackSlide.id) { onPlay(active); return; }
-    document.getElementById("latest-releases")?.scrollIntoView({ behavior: "smooth" });
+    document.getElementById("video-rows")?.scrollIntoView({ behavior: "smooth" });
   };
 
   const handlePointerMove = (event: PointerEvent<HTMLElement>) => {
@@ -217,7 +221,7 @@ const FeaturedHero = ({ onPlay }: Props) => {
 
   if (loading) {
     return (
-      <section ref={sectionRef} className="relative h-[86vh] min-h-[640px] overflow-hidden">
+      <section ref={sectionRef} className="relative h-[88svh] min-h-[680px] max-h-[920px] overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
         <div className="absolute inset-0">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_50%,rgba(200,0,0,0.06),transparent_55%)]" />
@@ -241,7 +245,7 @@ const FeaturedHero = ({ onPlay }: Props) => {
       ref={sectionRef}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
-      className="relative min-h-[900px] w-full overflow-hidden bg-black text-white sm:min-h-[760px] lg:h-[92svh] lg:min-h-[720px]"
+      className="relative h-[88svh] min-h-[680px] max-h-[920px] w-full overflow-hidden bg-black text-white"
     >
       {/* Layered background crossfade */}
       <div className="absolute inset-0">
@@ -276,16 +280,6 @@ const FeaturedHero = ({ onPlay }: Props) => {
           className="absolute inset-[-5%] overflow-hidden will-change-transform"
         >
           <HeroMotionBackground video={active} poster={poster} reduceMotion={!!reduceMotion} />
-          <img
-            src={poster}
-            alt=""
-            onError={(e) => {
-              const fb = getYouTubeFallbackThumbnail(active.youtube_video_id || active.youtube_url || active.storage_url);
-              if (fb && (e.target as HTMLImageElement).src !== fb) (e.target as HTMLImageElement).src = fb;
-            }}
-            className="absolute inset-0 h-full w-full object-cover opacity-15 mix-blend-screen"
-            aria-hidden="true"
-          />
         </motion.div>
       </div>
 
@@ -302,145 +296,128 @@ const FeaturedHero = ({ onPlay }: Props) => {
       <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/40 to-transparent" />
 
       {/* Content */}
-      <div className="relative z-10 mx-auto flex min-h-[900px] max-w-7xl items-center px-4 pb-28 pt-24 sm:min-h-[760px] sm:px-6 lg:h-full lg:min-h-[720px] lg:px-8 lg:pb-20">
+      <div className="relative z-10 mx-auto flex h-full max-w-7xl flex-col justify-center px-5 pb-10 pt-28 sm:px-8 sm:pb-12 sm:pt-28 lg:px-12">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           style={{ y: copyY, opacity: copyOpacity }}
           transition={{ duration: 0.9, ease: "easeOut" }}
-          className="grid w-full items-center gap-7 sm:gap-10 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_420px]"
+          className="flex w-full flex-col gap-5 sm:gap-6"
         >
-          {/* Left copy */}
-          <div className="max-w-3xl space-y-5 sm:space-y-7">
-            <motion.div
-              initial={{ opacity: 0, x: -18 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.65, delay: 0.1 }}
-              className="flex flex-wrap items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.26em] text-primary sm:text-[11px] sm:tracking-[0.32em]"
-            >
-              <motion.span
-                className="h-px bg-primary"
-                initial={{ width: 0 }}
-                animate={{ width: 44 }}
-                transition={{ duration: 0.9, delay: 0.35 }}
-              />
-              <span>Featured {active.category ? `· ${active.category}` : "Production"}</span>
-            </motion.div>
-
-            <AnimatePresence mode="wait">
+          <div className="grid items-center gap-5 sm:gap-7 lg:grid-cols-[minmax(0,0.86fr)_minmax(520px,1.14fr)]">
+            {/* Left copy */}
+            <div className="mx-auto w-full max-w-2xl space-y-4 text-left lg:mx-0">
               <motion.div
-                key={active.id + "-copy"}
-                initial={{ opacity: 0, y: 30, filter: "blur(10px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -22, filter: "blur(8px)" }}
-                transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
-                className="space-y-5"
+                initial={{ opacity: 0, x: -18 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.65, delay: 0.1 }}
+                className="flex flex-wrap items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-primary sm:text-[11px] sm:tracking-[0.32em]"
               >
-                <h1 className="max-w-4xl text-3xl font-bold leading-[1.04] tracking-normal text-white sm:text-5xl lg:text-5xl xl:text-6xl 2xl:text-7xl font-orbitron">
-                  {active.title}
-                </h1>
-                <p className="max-w-2xl text-sm leading-6 text-white/73 sm:text-lg sm:leading-7">
-                  {active.description ||
-                    "Cinematic automotive photography and videography built for launches, meets, builds, and stories that deserve more than a quick scroll."}
-                </p>
+                <motion.span
+                  className="h-px w-12 bg-primary"
+                  initial={{ width: 0 }}
+                  animate={{ width: 44 }}
+                  transition={{ duration: 0.9, delay: 0.35 }}
+                />
+                <span>Featured {active.category ? `- ${active.category}` : "Production"}</span>
               </motion.div>
-            </AnimatePresence>
 
-            <motion.div
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.38 }}
-              className="flex flex-col gap-3 sm:flex-row"
-            >
-              <Button
-                size="lg"
-                onClick={handlePlay}
-                className="h-12 rounded-md bg-primary px-6 font-semibold text-primary-foreground shadow-glow hover:bg-primary/90 btn-red-glow transition-all duration-300 hover:scale-[1.04] active:scale-[0.97]"
-              >
-                <Play className="mr-2" size={18} fill="currentColor" />
-                Watch Film
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                onClick={() => document.getElementById("latest-releases")?.scrollIntoView({ behavior: "smooth" })}
-                className="h-12 rounded-md border-white/25 bg-white/8 px-6 text-white hover:bg-white/15 hover:text-white hover:border-white/45 transition-all duration-300 hover:scale-[1.04] active:scale-[0.97]"
-              >
-                View Work
-                <ArrowRight className="ml-2" size={18} />
-              </Button>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.52 }}
-              className="grid max-w-2xl grid-cols-3 gap-2 pt-1 text-white/80 sm:gap-3 sm:pt-2"
-            >
-              {[["4K", "Visual-ready edits"], ["JDM", "Culture stories"], ["Photo", "Editorial shoots"]].map(([value, label], i) => (
+              <AnimatePresence mode="wait">
                 <motion.div
-                  key={value}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.58 + i * 0.08 }}
-                  whileHover={{ x: 3 }}
-                  className="border-l border-white/20 pl-3 sm:pl-4 cursor-default group"
+                  key={active.id + "-copy"}
+                  initial={{ opacity: 0, y: 30, filter: "blur(10px)" }}
+                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                  exit={{ opacity: 0, y: -22, filter: "blur(8px)" }}
+                  transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+                  className="space-y-4 sm:space-y-5"
                 >
-                  <div className="font-orbitron text-xl font-bold text-white sm:text-2xl group-hover:text-primary transition-colors duration-200">{value}</div>
-                  <div className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/48 sm:text-xs sm:tracking-[0.18em]">{label}</div>
+                  <h1 className="font-orbitron text-[2rem] font-black leading-[1.08] text-white sm:text-4xl lg:text-5xl xl:text-[3.35rem]">
+                    {active.title}
+                  </h1>
+                  <p className="max-w-xl line-clamp-3 text-sm leading-relaxed text-white/70 sm:text-base lg:text-white/62">
+                    {active.description ||
+                      "Cinematic automotive photography and videography built for launches, meets, builds, and stories that deserve more than a quick scroll."}
+                  </p>
                 </motion.div>
-              ))}
-            </motion.div>
-          </div>
+              </AnimatePresence>
 
-          {/* Right: 3D poster card */}
-          <motion.div
-            className="perspective-hero mx-auto w-full max-w-[320px] sm:max-w-[380px] lg:block lg:max-w-[360px] xl:max-w-none"
-            initial={{ opacity: 0, x: 40 }}
-            animate={{ opacity: 1, x: 0 }}
-            style={{ rotateX, rotateY }}
-            transition={{ duration: 0.9, delay: 0.28, ease: "easeOut" }}
-          >
-            <AnimatePresence mode="wait">
               <motion.div
-                key={active.id + "-card"}
-                initial={{ opacity: 0, scale: 0.92, y: 18 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 1.05, y: -12 }}
-                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                className="relative preserve-3d"
+                initial={{ opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.38 }}
+                className="flex flex-wrap items-center gap-3 pt-1"
               >
-                <div className="absolute -inset-6 translate-x-6 translate-y-6 rotate-2 rounded-md border border-white/8 bg-white/4" />
-                <div className="relative overflow-hidden rounded-md border border-white/16 bg-white/8 shadow-2xl ring-1 ring-white/5">
-                  <img
-                    src={poster}
-                    alt=""
-                    onError={(e) => {
-                      const fb = getYouTubeFallbackThumbnail(active.youtube_video_id || active.youtube_url || active.storage_url);
-                      if (fb && (e.target as HTMLImageElement).src !== fb) (e.target as HTMLImageElement).src = fb;
-                    }}
-                    className="aspect-[16/10] w-full object-cover lg:aspect-[4/5] transition-transform duration-700 hover:scale-105"
-                    aria-hidden="true"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/88 via-transparent to-transparent" />
-                  {/* Scan line */}
-                  <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                    <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent cinematic-scan" />
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 p-5">
-                    <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-white/55">
-                      <Film size={13} />
-                      <span>{active.category || "Featured"}</span>
-                    </div>
-                    <p className="line-clamp-2 font-orbitron text-lg font-bold text-white leading-tight">{active.title}</p>
-                    {active.duration && (
-                      <span className="mt-1 inline-block text-[10px] text-white/45 tracking-wider">{active.duration}</span>
-                    )}
-                  </div>
-                </div>
+                <Button
+                  size="lg"
+                  onClick={handlePlay}
+                  className="h-12 min-w-[150px] rounded-md bg-primary px-5 font-semibold text-primary-foreground shadow-glow transition-all duration-300 hover:scale-[1.04] hover:bg-primary/90 active:scale-[0.97] btn-red-glow sm:px-6"
+                >
+                  <Play className="mr-2" size={18} fill="currentColor" />
+                  Watch Film
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => document.getElementById("video-rows")?.scrollIntoView({ behavior: "smooth" })}
+                  className="h-12 min-w-[150px] rounded-md border-white/25 bg-white/8 px-5 text-white transition-all duration-300 hover:scale-[1.04] hover:border-white/45 hover:bg-white/15 hover:text-white active:scale-[0.97] sm:px-6"
+                >
+                  View Work
+                  <ArrowRight className="ml-2" size={18} />
+                </Button>
               </motion.div>
-            </AnimatePresence>
-          </motion.div>
+            </div>
+
+            {/* Thumbnail cover card over the autoplay hero media */}
+            <motion.button
+              type="button"
+              onClick={handlePlay}
+              style={{ rotateX, rotateY }}
+              initial={{ opacity: 0, y: 26, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.85, delay: 0.18, ease: "easeOut" }}
+              className="group relative mx-auto aspect-video w-full max-w-[620px] overflow-hidden rounded-[1.1rem] border border-primary/70 bg-black text-left shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_0_42px_rgba(239,68,68,0.30)] outline-none sm:rounded-[1.35rem] lg:max-w-none lg:shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_0_54px_rgba(239,68,68,0.36)]"
+              aria-label={`Play ${active.title}`}
+            >
+              <AnimatePresence mode="wait">
+                <motion.img
+                  key={`hero-card-${active.id}`}
+                  src={poster}
+                  alt={active.title}
+                  initial={{ opacity: 0, scale: 1.06 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.02 }}
+                  transition={{ duration: 0.75, ease: "easeOut" }}
+                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.035]"
+                  onError={(e) => {
+                    const fb = getYouTubeFallbackThumbnail(active.youtube_video_id || active.youtube_url || active.storage_url);
+                    if (fb && (e.target as HTMLImageElement).src !== fb) (e.target as HTMLImageElement).src = fb;
+                  }}
+                />
+              </AnimatePresence>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/14 to-transparent" />
+              <div className="absolute inset-0 bg-primary/10 mix-blend-screen" />
+              <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full border border-white/15 bg-black/45 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-white/78 sm:left-5 sm:top-5 sm:px-3 sm:py-1.5 sm:text-[10px]">
+                <Sparkles size={12} className="text-primary" />
+                Hero Preview
+              </div>
+              {isEmbeddedVideo(active) && (
+                <div className="absolute right-3 top-3 rounded-full border border-primary/40 bg-primary/15 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-primary sm:right-5 sm:top-5 sm:px-3 sm:text-[10px]">
+                  Embed
+                </div>
+              )}
+              <div className="absolute inset-0 grid place-items-center">
+                <div className="grid h-16 w-16 place-items-center rounded-full border border-white/25 bg-primary shadow-[0_0_0_9px_rgba(239,68,68,0.16),0_0_32px_rgba(239,68,68,0.62)] transition duration-300 group-hover:scale-110 sm:h-24 sm:w-24 sm:shadow-[0_0_0_12px_rgba(239,68,68,0.16),0_0_42px_rgba(239,68,68,0.62)]">
+                  <Play className="ml-1 text-primary-foreground" size={30} fill="currentColor" />
+                </div>
+              </div>
+              <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-5">
+                <p className="font-orbitron text-sm font-bold text-white line-clamp-1 sm:text-lg">{active.title}</p>
+                <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-white/48 sm:text-xs sm:tracking-[0.22em]">
+                  {active.duration ? `${active.duration} / ` : ""}{active.category || "AUTODOSE"}
+                </p>
+              </div>
+            </motion.button>
+          </div>
         </motion.div>
       </div>
 
@@ -450,7 +427,7 @@ const FeaturedHero = ({ onPlay }: Props) => {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1.0, duration: 0.6 }}
-          className="absolute bottom-20 right-4 z-20 flex items-center gap-3 sm:right-6 lg:bottom-24 lg:right-10"
+          className="absolute bottom-8 right-4 z-20 hidden sm:flex items-center gap-3 sm:right-8 lg:right-12"
         >
           <div className="relative w-9 h-9 flex items-center justify-center">
             <ProgressRing active paused={paused} duration={ROTATE_MS} key={`ring-${activeIndex}-${paused}`} />
@@ -492,7 +469,7 @@ const FeaturedHero = ({ onPlay }: Props) => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1.1, duration: 0.6 }}
-          className="absolute bottom-[5.5rem] left-4 z-20 sm:left-6 lg:bottom-24 lg:left-10 font-orbitron text-xs text-white/38 tracking-[0.25em] select-none"
+          className="absolute bottom-8 left-4 z-20 hidden sm:block sm:left-8 lg:left-12 font-orbitron text-xs text-white/38 tracking-[0.25em] select-none"
         >
           <AnimatePresence mode="wait">
             <motion.span
