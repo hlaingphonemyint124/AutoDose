@@ -34,6 +34,11 @@ export class ErrorBoundary extends Component<Props, State> {
                 AUTO<span className="text-foreground">DOSE</span>
               </h1>
               <p className="text-muted-foreground">Something went wrong. Please refresh the page.</p>
+              {this.state.error && (
+                <pre className="mt-4 max-w-xl text-left text-xs text-red-400/90 whitespace-pre-wrap break-words px-4">
+                  {this.state.error.message}
+                </pre>
+              )}
               <button
                 onClick={() => window.location.reload()}
                 className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium"

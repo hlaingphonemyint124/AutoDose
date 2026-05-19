@@ -103,7 +103,7 @@ const CinematicShowcase = () => {
               <div className="relative overflow-hidden border border-border bg-card shadow-card">
                 <div className="relative aspect-[16/10] overflow-hidden">
                   <motion.img
-                    src="src/assets/rx8.jpg"
+                    src={heroImage}
                     alt="AUTODOSE cinematic automotive production"
                     style={{ y: imageY }}
                     className="h-[120%] w-full object-cover"

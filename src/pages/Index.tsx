@@ -1,7 +1,6 @@
 import { useState } from "react";
 import SEO from "@/components/SEO";
 import Navbar from "@/components/Navbar";
-import ScrollProgressBar from "@/components/ScrollProgressBar";
 import FeaturedHero from "@/components/FeaturedHero";
 import HomeVideoRows from "@/components/HomeVideoRows";
 import PhotoHero from "@/components/PhotoHero";
@@ -31,7 +30,6 @@ const Index = () => {
         }}
       />
 
-      <ScrollProgressBar />
       <Navbar />
 
       {/* Video Hero — full bleed, thumbnails as background */}

@@ -1,6 +1,6 @@
 /**
  * FeaturedHero — AUTODOSE
- * Centre carousel with flanking prev/next cards, blurred YouTube BG,
+ * Centered video slideshow with blurred YouTube BG,
  * touch/pointer swipe, 3-D tilt, parallax scroll, auto-rotate.
  */
 
@@ -20,17 +20,7 @@ import {
   useSpring,
   useTransform,
 } from "framer-motion";
-import {
-  ArrowRight,
-  ChevronLeft,
-  ChevronRight,
-  Maximize2,
-  Pause,
-  Play,
-  Settings,
-  SkipBack,
-  Volume2,
-} from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { hasSupabaseConfig, supabase } from "@/integrations/supabase/client";
 import {
@@ -39,6 +29,7 @@ import {
   getYouTubeVideoId,
 } from "@/lib/youtube";
 import heroImage from "@/assets/hero-jdm.jpg";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 /* ── Types ────────────────────────────────────────────────────────── */
 interface FeaturedVideo {
@@ -125,6 +116,10 @@ const FALLBACK: FeaturedVideo[] = [
 /* ── Helpers ──────────────────────────────────────────────────────── */
 function wrap(i: number, len: number): number {
   return ((i % len) + len) % len;
+}
+
+function centerSlideIndex(count: number): number {
+  return Math.max(0, Math.floor((count - 1) / 2));
 }
 
 function getPoster(v: FeaturedVideo): string {
@@ -228,80 +223,179 @@ function ProgressRing({
   );
 }
 
-/* ── Side thumbnail card ─────────────────────────────────────────── */
+/* ── Custom pause (rounded bars) ─────────────────────────────────── */
+function SlideshowPauseIcon() {
+  return (
+    <span className="inline-flex items-center justify-center gap-[3px]" aria-hidden>
+      <span className="h-3 w-[3.5px] rounded-full bg-current shadow-[0_0_6px_rgba(239,68,68,0.45)]" />
+      <span className="h-3 w-[3.5px] rounded-full bg-current shadow-[0_0_6px_rgba(239,68,68,0.45)]" />
+    </span>
+  );
+}
+
+/* ── Side thumbnail card (cinematic vertical stack) ───────────────── */
 function SideCard({
   video,
   dist,
   side,
   onClick,
   delay,
+  interactive = true,
 }: {
   video: FeaturedVideo;
   dist: 1 | 2 | 3;
   side: "left" | "right";
   onClick: () => void;
   delay: number;
+  interactive?: boolean;
 }) {
   const poster = getPoster(video);
-  const opacity = dist === 1 ? 1 : dist === 2 ? 0.55 : 0.28;
-  const scale = dist === 1 ? 1 : dist === 2 ? 0.93 : 0.86;
+  const opacity = dist === 1 ? 1 : dist === 2 ? 0.72 : 0.45;
+  const scale = dist === 1 ? 1 : dist === 2 ? 0.92 : 0.84;
+  const rotateY =
+    side === "left"
+      ? dist === 1
+        ? 10
+        : dist === 2
+          ? 16
+          : 22
+      : dist === 1
+        ? -10
+        : dist === 2
+          ? -16
+          : -22;
+  const durationLabel = video.duration?.trim() || "—:—";
+  const subtitle = video.category?.trim() || video.description?.trim() || "AUTODOSE";
+
+  const cardClass = [
+    "group relative w-full overflow-hidden rounded-2xl border bg-black text-left",
+    "shadow-[0_12px_40px_rgba(0,0,0,0.55)] transition-[border-color,box-shadow] duration-300",
+    interactive
+      ? "cursor-pointer outline-none hover:border-primary hover:shadow-[0_0_32px_rgba(239,68,68,0.42)]"
+      : "pointer-events-none cursor-default select-none",
+    dist === 1 ? "border-white/20" : "border-white/10",
+  ].join(" ");
+
+  const motionProps = {
+    initial: { opacity: 0, x: side === "left" ? -20 : 20, rotateY: rotateY * 1.2 },
+    animate: { opacity, scale, x: 0, rotateY },
+    ...(interactive
+      ? {
+          whileHover: {
+            opacity: Math.min(opacity + 0.15, 1),
+            scale: scale + 0.035,
+            rotateY: rotateY * 0.65,
+          },
+        }
+      : {}),
+    transition: { duration: 0.48, delay, ease: "easeOut" as const },
+    className: cardClass,
+    style: { transformPerspective: 900, transformStyle: "preserve-3d" as const },
+  };
+
+  const inner = (
+    <div key={video.id} className="relative aspect-[3/4.2] w-full overflow-hidden sm:aspect-[3/4.5]">
+      <img
+        src={poster}
+        alt=""
+        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.06]"
+        onError={(e) => {
+          const fb =
+            getYouTubeFallbackThumbnail(
+              video.youtube_video_id || video.youtube_url || video.storage_url
+            ) || heroImage;
+          const el = e.target as HTMLImageElement;
+          if (el.src !== fb) el.src = fb;
+        }}
+      />
+      <motion.div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-black/10" />
+      <motion.div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+
+      <span className="absolute left-2 top-2 z-10 rounded-md border border-white/12 bg-black/55 px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-white/80 backdrop-blur-sm sm:left-2.5 sm:top-2.5 sm:text-[10px]">
+        {durationLabel}
+      </span>
+
+      <motion.div
+        aria-hidden
+        className={[
+          "absolute bottom-2 left-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-white/25 bg-black/45 backdrop-blur-sm transition-all duration-300 sm:bottom-2.5 sm:left-2.5 sm:h-8 sm:w-8",
+          interactive ? "group-hover:border-primary group-hover:bg-primary/90 group-hover:shadow-[0_0_16px_rgba(239,68,68,0.65)]" : "",
+        ].join(" ")}
+      >
+        <Play size={11} fill="white" className="ml-0.5 text-white" />
+      </motion.div>
+
+      <div className="absolute inset-x-0 bottom-0 z-10 p-2 pt-10 sm:p-2.5 sm:pt-12">
+        <p
+          className={[
+            "font-orbitron font-bold uppercase leading-tight text-white line-clamp-2",
+            dist === 1 ? "text-[9px] sm:text-[11px]" : dist === 2 ? "text-[8px] sm:text-[10px]" : "text-[7px] sm:text-[9px]",
+          ].join(" ")}
+        >
+          {video.title}
+        </p>
+        {dist <= 2 && (
+          <p className="mt-0.5 line-clamp-1 text-[8px] leading-snug text-white/55 sm:text-[9px]">{subtitle}</p>
+        )}
+      </div>
+    </div>
+  );
+
+  if (interactive) {
+    return (
+      <motion.button
+        type="button"
+        onClick={onClick}
+        aria-label={`${side === "left" ? "Previous" : "Next"}: ${video.title}`}
+        {...motionProps}
+      >
+        {inner}
+      </motion.button>
+    );
+  }
+
+  return (
+    <motion.div aria-hidden {...motionProps}>
+      {inner}
+    </motion.div>
+  );
+}
+
+/* ── Animated scroll cue ─────────────────────────────────────────── */
+function HeroScrollCue({ onClick }: { onClick: () => void }) {
+  const reduceMotion = useReducedMotion();
 
   return (
     <motion.button
       type="button"
       onClick={onClick}
-      initial={{ opacity: 0, x: side === "left" ? -28 : 28 }}
-      animate={{ opacity, scale, x: 0 }}
-      whileHover={{ opacity: Math.min(opacity + 0.2, 1), scale: scale + 0.02 }}
-      transition={{ duration: 0.5, delay, ease: "easeOut" }}
-      className={[
-        "relative w-full overflow-hidden rounded-xl border bg-black/60 text-left",
-        "outline-none backdrop-blur-sm cursor-pointer",
-        dist === 1
-          ? "border-white/15 hover:border-primary/50 hover:shadow-[0_0_20px_rgba(239,68,68,0.22)]"
-          : "border-white/8 hover:border-white/18",
-      ].join(" ")}
-      aria-label={`Play ${video.title}`}
+      aria-label="Scroll down to videos"
+      className="mt-3 flex flex-col items-center gap-1.5 text-white/50 transition-colors hover:text-primary focus:outline-none focus-visible:text-primary"
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 1.05, duration: 0.55 }}
     >
-      {/* Thumbnail */}
-      <div className="relative aspect-video w-full overflow-hidden">
-        <img
-          src={poster}
-          alt={video.title}
-          className="h-full w-full object-cover transition-transform duration-500"
-          onError={(e) => {
-            const fb =
-              getYouTubeFallbackThumbnail(
-                video.youtube_video_id || video.youtube_url || video.storage_url
-              ) || heroImage;
-            const el = e.target as HTMLImageElement;
-            if (el.src !== fb) el.src = fb;
-          }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
-        {/* Hover play */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-200">
-          <div className="h-9 w-9 rounded-full bg-primary/85 flex items-center justify-center shadow-[0_0_18px_rgba(239,68,68,0.6)]">
-            <Play size={12} fill="white" className="ml-0.5 text-white" />
-          </div>
-        </div>
-      </div>
-      {/* Info — only for closest card */}
-      {dist === 1 && (
-        <div className="p-2.5">
-          <p className="font-orbitron text-[11px] font-bold leading-snug text-white line-clamp-2">
-            {video.title}
-          </p>
-          {video.duration && (
-            <p className="mt-0.5 font-mono text-[10px] text-white/38">{video.duration}</p>
-          )}
-        </div>
-      )}
+      <span className="text-[9px] font-semibold uppercase tracking-[0.34em] text-white/38">
+        Scroll
+      </span>
+      <motion.span
+        animate={reduceMotion ? undefined : { y: [0, 7, 0] }}
+        transition={{ duration: 1.65, repeat: Infinity, ease: "easeInOut" }}
+        className="flex h-10 w-10 items-center justify-center rounded-full border border-white/14 bg-black/50 shadow-[0_0_20px_rgba(0,0,0,0.45)] backdrop-blur-md"
+      >
+        <ChevronDown size={20} strokeWidth={2.25} className="text-primary" />
+      </motion.span>
+      <motion.span
+        aria-hidden
+        className="h-5 w-px bg-gradient-to-b from-primary/70 to-transparent"
+        animate={reduceMotion ? undefined : { scaleY: [0.6, 1, 0.6], opacity: [0.35, 0.85, 0.35] }}
+        transition={{ duration: 1.65, repeat: Infinity, ease: "easeInOut" }}
+      />
     </motion.button>
   );
 }
 
-/* ═════════════════════════════════════════════════════════════════════
+/* ═
    MAIN COMPONENT
 ═══════════════════════════════════════════════════════════════════ */
 export default function FeaturedHero({ onPlay }: Props) {
@@ -311,11 +405,13 @@ export default function FeaturedHero({ onPlay }: Props) {
 
   const [videos, setVideos] = useState<FeaturedVideo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeIdx, setActiveIdx] = useState(0);
+  const [activeIdx, setActiveIdx] = useState(() => centerSlideIndex(FALLBACK.length));
   const [prevIdx, setPrevIdx] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
 
   const reduceMotion = useReducedMotion();
+  const isMobile = useIsMobile();
+  const sideCardsInteractive = !isMobile;
 
   /* ── Parallax ── */
   const { scrollYProgress } = useScroll({
@@ -382,6 +478,8 @@ export default function FeaturedHero({ onPlay }: Props) {
 
         if (!cancelled && data && data.length > 0) {
           setVideos(data as unknown as FeaturedVideo[]);
+          setActiveIdx(centerSlideIndex(data.length));
+          setPrevIdx(null);
         }
       } catch (err) {
         console.warn("FeaturedHero fetch error:", err);
@@ -409,12 +507,12 @@ export default function FeaturedHero({ onPlay }: Props) {
   /* ── 3D tilt tracking ── */
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLElement>) => {
-      if (reduceMotion) return;
+      if (reduceMotion || isMobile) return;
       const rect = e.currentTarget.getBoundingClientRect();
       mx.set(((e.clientX - rect.left) / rect.width - 0.5) * 2);
       my.set(((e.clientY - rect.top) / rect.height - 0.5) * 2);
     },
-    [reduceMotion, mx, my]
+    [reduceMotion, isMobile, mx, my]
   );
   const handlePointerLeave = useCallback(() => {
     mx.set(0);
@@ -449,14 +547,24 @@ export default function FeaturedHero({ onPlay }: Props) {
     document.getElementById("video-rows")?.scrollIntoView({ behavior: "smooth" });
   }, [active, onPlay]);
 
-  /* Side card indices */
-  const leftIdxs = [wrap(activeIdx - 1, N), wrap(activeIdx - 2, N), wrap(activeIdx - 3, N)];
-  const rightIdxs = [wrap(activeIdx + 1, N), wrap(activeIdx + 2, N), wrap(activeIdx + 3, N)];
+  const scrollToVideos = useCallback(() => {
+    document.getElementById("video-rows")?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
+  const leftIdxs = useMemo(
+    () => [wrap(activeIdx - 1, N), wrap(activeIdx - 2, N), wrap(activeIdx - 3, N)],
+    [activeIdx, N]
+  );
+  const rightIdxs = useMemo(
+    () => [wrap(activeIdx + 1, N), wrap(activeIdx + 2, N), wrap(activeIdx + 3, N)],
+    [activeIdx, N]
+  );
 
   /* ── Loading skeleton ── */
   if (loading) {
     return (
       <section
+        ref={sectionRef}
         className="relative h-[92svh] min-h-[680px] max-h-[980px] overflow-hidden bg-black"
         aria-label="Loading hero"
       >
@@ -581,122 +689,145 @@ export default function FeaturedHero({ onPlay }: Props) {
           </AnimatePresence>
         </motion.div>
 
-        {/* ── Carousel ── */}
-        <div
-          className="flex-1 flex items-center justify-center min-h-0 px-0 pb-2"
-          onPointerDown={handlePointerDown}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          style={{ touchAction: "pan-y" }}
+        {/* ── Carousel: previous | center | next ── */}
+        <motion.div
+          className="relative flex flex-1 min-h-0 w-full flex-col items-center justify-center px-1 pb-2 sm:px-4 sm:pb-4"
+          {...(!isMobile
+            ? {
+                onPointerDown: handlePointerDown,
+                onPointerUp: handlePointerUp,
+                onPointerCancel: handlePointerUp,
+                onTouchStart: handleTouchStart,
+                onTouchEnd: handleTouchEnd,
+                style: { touchAction: "pan-y" as const },
+              }
+            : { style: { touchAction: "pan-y" as const } })}
         >
-          <div className="w-full max-w-[1540px] flex items-center justify-center gap-2 sm:gap-3 lg:gap-4 px-2 sm:px-4">
-
-            {/* ══ LEFT cards (Previous) ══ */}
-            <div
-              className="hidden sm:flex items-end justify-end gap-1.5 sm:gap-2 flex-shrink-0"
-              style={{ width: "clamp(110px, 21vw, 310px)" }}
-            >
-              {N > 3 && (
-                <div className="hidden xl:block" style={{ width: "27%" }}>
+          <motion.div
+            className="flex w-full max-w-[1540px] items-end justify-center gap-0.5 sm:gap-2 lg:gap-3"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.12 }}
+          >
+            {N > 1 && (
+              <motion.div
+                className="flex flex-shrink-0 items-end justify-end gap-0.5 sm:gap-1.5 lg:gap-2"
+                style={{ width: "clamp(52px, 17vw, 300px)" }}
+                initial={{ opacity: 0, x: -16 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.55, delay: 0.2 }}
+              >
+                {N > 3 && (
+                  <motion.div key={`l3-${leftIdxs[2]}`} className="block" style={{ width: "26%" }}>
+                    <SideCard
+                      video={slides[leftIdxs[2]]}
+                      dist={3}
+                      side="left"
+                      onClick={() => goTo(leftIdxs[2])}
+                      delay={0.5}
+                      interactive={sideCardsInteractive}
+                    />
+                  </motion.div>
+                )}
+                {N > 2 && (
+                  <div key={`l2-${leftIdxs[1]}`} className="block" style={{ width: "36%" }}>
+                    <SideCard
+                      video={slides[leftIdxs[1]]}
+                      dist={2}
+                      side="left"
+                      onClick={() => goTo(leftIdxs[1])}
+                      delay={0.42}
+                      interactive={sideCardsInteractive}
+                    />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="mb-1 hidden text-center text-[9px] font-semibold uppercase tracking-[0.28em] text-white/38 sm:mb-1.5 sm:block">
+                    Previous
+                  </p>
                   <SideCard
-                    video={slides[leftIdxs[2]]}
-                    dist={3}
+                    key={`l1-${leftIdxs[0]}`}
+                    video={slides[leftIdxs[0]]}
+                    dist={1}
                     side="left"
-                    onClick={() => goTo(leftIdxs[2])}
-                    delay={0.52}
+                    onClick={() => goTo(leftIdxs[0])}
+                    delay={0.34}
+                    interactive={sideCardsInteractive}
                   />
                 </div>
-              )}
-              {N > 2 && (
-                <div className="hidden lg:block" style={{ width: "37%" }}>
-                  <SideCard
-                    video={slides[leftIdxs[1]]}
-                    dist={2}
-                    side="left"
-                    onClick={() => goTo(leftIdxs[1])}
-                    delay={0.44}
-                  />
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.5 }}
-                  className="mb-1.5 text-center text-[9px] font-semibold uppercase tracking-[0.28em] text-white/35"
-                >
-                  Previous
-                </motion.p>
-                <SideCard
-                  video={slides[leftIdxs[0]]}
-                  dist={1}
-                  side="left"
-                  onClick={() => goTo(leftIdxs[0])}
-                  delay={0.36}
-                />
-              </div>
-            </div>
+              </motion.div>
+            )}
 
-            {/* ══ Left chevron ══ */}
             <motion.button
               type="button"
               onClick={goPrev}
-              initial={{ opacity: 0, x: -14 }}
+              initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.55 }}
-              whileHover={{ scale: 1.12 }}
+              transition={{ delay: 0.5 }}
+              whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              className="hidden lg:flex flex-shrink-0 h-11 w-11 items-center justify-center rounded-full border border-white/14 bg-black/55 text-white/70 backdrop-blur-sm transition-colors duration-200 hover:border-primary/55 hover:bg-primary/18 hover:text-primary"
+              className="hidden lg:flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border border-white/14 bg-black/55 text-white/70 backdrop-blur-sm transition-colors hover:border-primary/55 hover:bg-primary/18 hover:text-primary"
               aria-label="Previous video"
             >
               <ChevronLeft size={20} />
             </motion.button>
 
-            {/* ══ Center featured card ══ */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.94, y: 22 }}
+              initial={{ opacity: 0, scale: 0.94, y: 18 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ duration: 0.88, delay: 0.18, ease: "easeOut" }}
-              className="relative flex-1 min-w-0 flex-shrink-0"
-              style={{ maxWidth: "clamp(300px, 54vw, 900px)" }}
+              transition={{ duration: 0.8, delay: 0.16, ease: "easeOut" }}
+              className="relative min-w-0 flex-1 flex-shrink-0"
+              style={{ maxWidth: "clamp(148px, 38vw, 880px)" }}
             >
-              <motion.div
+            <motion.div
+              style={
+                isMobile
+                  ? undefined
+                  : {
+                      rotateX: tiltX,
+                      rotateY: tiltY,
+                      transformPerspective: 1100,
+                    }
+              }
+              className="w-full"
+            >
+              <button
+                type="button"
+                onClick={isMobile ? undefined : handlePlay}
+                disabled={isMobile}
+                aria-hidden={isMobile}
+                tabIndex={isMobile ? -1 : 0}
+                className={[
+                  "relative block w-full overflow-hidden rounded-xl border border-primary/35 bg-black text-left sm:rounded-2xl",
+                  isMobile
+                    ? "pointer-events-none cursor-default select-none"
+                    : "group outline-none transition-shadow duration-300 hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-black",
+                ].join(" ")}
                 style={{
-                  rotateX: tiltX,
-                  rotateY: tiltY,
-                  transformPerspective: 1100,
+                  boxShadow:
+                    "0 0 0 1px rgba(255,255,255,0.06), 0 0 55px rgba(239,68,68,0.22), 0 28px 90px rgba(0,0,0,0.88)",
                 }}
-                className="w-full"
+                aria-label={`Play ${active.title}`}
               >
-                {/* Video card */}
-                <div
-                  className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black border border-primary/35"
-                  style={{
-                    boxShadow:
-                      "0 0 0 1px rgba(255,255,255,0.06), 0 0 55px rgba(239,68,68,0.22), 0 28px 90px rgba(0,0,0,0.88)",
-                  }}
-                >
-                  {/* Badges */}
+                <motion.div className="relative aspect-video w-full overflow-hidden">
                   <div className="absolute left-4 top-4 z-10 rounded-sm border border-white/14 bg-black/55 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/75 backdrop-blur-sm">
                     Featured
                   </div>
-                  <div className="absolute right-4 top-4 z-10 h-8 w-8 rounded-full border border-white/14 bg-black/55 flex items-center justify-center text-white/55 backdrop-blur-sm">
-                    <Volume2 size={13} />
-                  </div>
-
-                  {/* Thumbnail */}
                   <AnimatePresence mode="wait">
                     <motion.img
                       key={`thumb-${active.id}`}
                       src={poster}
                       alt={active.title}
-                      initial={{ opacity: 0, scale: 1.06 }}
+                      initial={{ opacity: 0, scale: 1.05 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 1.03 }}
-                      transition={{ duration: 0.7, ease: "easeOut" }}
-                      className="absolute inset-0 h-full w-full object-cover"
+                      exit={{ opacity: 0, scale: 1.02 }}
+                      transition={{ duration: 0.65, ease: "easeOut" }}
+                      className={[
+                        "absolute inset-0 h-full w-full object-cover",
+                        !isMobile && "transition-transform duration-500 group-hover:scale-[1.02]",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
                       onError={(e) => {
                         const fb =
                           getYouTubeFallbackThumbnail(
@@ -709,317 +840,186 @@ export default function FeaturedHero({ onPlay }: Props) {
                       }}
                     />
                   </AnimatePresence>
-
-                  {/* Scrim */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
-                  <div className="absolute inset-0 bg-primary/5 mix-blend-screen" />
-
-                  {/* Play button */}
-                  <button
-                    type="button"
-                    onClick={handlePlay}
-                    className="absolute inset-0 flex items-center justify-center group"
-                    aria-label={`Play ${active.title}`}
-                  >
-                    <motion.div
-                      whileHover={{ scale: 1.14 }}
-                      whileTap={{ scale: 0.92 }}
-                      className="h-16 w-16 sm:h-[72px] sm:w-[72px] lg:h-[84px] lg:w-[84px] rounded-full border border-white/24 bg-primary flex items-center justify-center transition-shadow duration-300"
-                      style={{
-                        boxShadow:
-                          "0 0 0 11px rgba(239,68,68,0.13), 0 0 44px rgba(239,68,68,0.58)",
-                      }}
-                    >
-                      <Play size={28} fill="white" className="ml-1 text-white" />
-                    </motion.div>
-                  </button>
-
-                  {/* Bottom info */}
-                  <div className="absolute bottom-0 inset-x-0 p-3 sm:p-4">
-                    <AnimatePresence mode="wait">
-                      <motion.div
-                        key={active.id + "-info"}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
-                        transition={{ duration: 0.36 }}
-                      >
-                        <p className="font-orbitron text-sm font-bold text-white line-clamp-1 sm:text-base lg:text-lg">
-                          {active.title}
-                        </p>
-                        <p className="mt-0.5 text-[10px] uppercase tracking-[0.20em] text-white/38 sm:text-xs">
-                          {active.category || "AUTODOSE"}
-                        </p>
-                      </motion.div>
-                    </AnimatePresence>
-                  </div>
-                </div>
-
-                {/* ── Controls bar ── */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.75, duration: 0.5 }}
-                  className="mt-2 flex items-center gap-2 rounded-xl border border-white/8 bg-black/78 px-3 py-2.5 backdrop-blur-md sm:gap-2.5 sm:px-4"
-                >
-                  <button
-                    aria-label="Restart"
-                    className="flex-shrink-0 text-white/50 hover:text-white transition-colors"
-                  >
-                    <SkipBack size={15} />
-                  </button>
-                  <button
-                    onClick={handlePlay}
-                    aria-label="Play"
-                    className="flex-shrink-0 text-white/75 hover:text-primary transition-colors"
-                  >
-                    <Play size={17} fill="currentColor" />
-                  </button>
-                  <button
-                    aria-label="Volume"
-                    className="flex-shrink-0 text-white/50 hover:text-white transition-colors"
-                  >
-                    <Volume2 size={15} />
-                  </button>
-
-                  {/* Scrubber */}
-                  <div className="flex-1 relative h-1 cursor-pointer rounded-full bg-white/14 overflow-visible">
-                    <motion.div
-                      key={activeIdx + "-bar"}
-                      className="absolute inset-y-0 left-0 rounded-full bg-primary"
-                      initial={{ width: "0%" }}
-                      animate={{ width: "38%" }}
-                      transition={{ duration: 2, ease: "easeOut" }}
-                    />
-                    <div
-                      className="absolute top-1/2 left-[38%] -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-primary"
-                      style={{ boxShadow: "0 0 7px rgba(239,68,68,0.9)" }}
-                    />
-                  </div>
-
-                  <span className="flex-shrink-0 font-mono text-[10px] text-white/38 hidden sm:block">
-                    01:24&nbsp;/&nbsp;{active.duration || "03:56"}
-                  </span>
-                  <span className="flex-shrink-0 rounded border border-primary/40 px-1.5 py-0.5 font-mono text-[10px] font-bold text-primary">
-                    4K
-                  </span>
-                  <button
-                    aria-label="Settings"
-                    className="flex-shrink-0 text-white/45 hover:text-white transition-colors"
-                  >
-                    <Settings size={14} />
-                  </button>
-                  <button
-                    aria-label="Fullscreen"
-                    className="flex-shrink-0 text-white/45 hover:text-white transition-colors"
-                  >
-                    <Maximize2 size={14} />
-                  </button>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent" />
+                  <motion.div className="absolute inset-0 bg-primary/0 transition-colors duration-300 group-hover:bg-primary/8" />
                 </motion.div>
-              </motion.div>
+              </button>
+            </motion.div>
             </motion.div>
 
-            {/* ══ Right chevron ══ */}
             <motion.button
               type="button"
               onClick={goNext}
-              initial={{ opacity: 0, x: 14 }}
+              initial={{ opacity: 0, x: 12 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.55 }}
-              whileHover={{ scale: 1.12 }}
+              transition={{ delay: 0.5 }}
+              whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              className="hidden lg:flex flex-shrink-0 h-11 w-11 items-center justify-center rounded-full border border-white/14 bg-black/55 text-white/70 backdrop-blur-sm transition-colors duration-200 hover:border-primary/55 hover:bg-primary/18 hover:text-primary"
+              className="hidden lg:flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border border-white/14 bg-black/55 text-white/70 backdrop-blur-sm transition-colors hover:border-primary/55 hover:bg-primary/18 hover:text-primary"
               aria-label="Next video"
             >
               <ChevronRight size={20} />
             </motion.button>
 
-            {/* ══ RIGHT cards (Up Next) ══ */}
-            <div
-              className="hidden sm:flex items-end justify-start gap-1.5 sm:gap-2 flex-shrink-0"
-              style={{ width: "clamp(110px, 21vw, 310px)" }}
-            >
-              <div className="flex-1 min-w-0">
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.5 }}
-                  className="mb-1.5 text-center text-[9px] font-semibold uppercase tracking-[0.28em] text-white/35"
-                >
-                  Up Next
-                </motion.p>
-                <SideCard
-                  video={slides[rightIdxs[0]]}
-                  dist={1}
-                  side="right"
-                  onClick={() => goTo(rightIdxs[0])}
-                  delay={0.36}
-                />
-              </div>
-              {N > 2 && (
-                <div className="hidden lg:block" style={{ width: "37%" }}>
-                  <SideCard
-                    video={slides[rightIdxs[1]]}
-                    dist={2}
-                    side="right"
-                    onClick={() => goTo(rightIdxs[1])}
-                    delay={0.44}
-                  />
-                </div>
-              )}
-              {N > 3 && (
-                <div className="hidden xl:block" style={{ width: "27%" }}>
-                  <SideCard
-                    video={slides[rightIdxs[2]]}
-                    dist={3}
-                    side="right"
-                    onClick={() => goTo(rightIdxs[2])}
-                    delay={0.52}
-                  />
-                </div>
-              )}
-            </div>
-
-          </div>
-        </div>
-
-        {/* ── CTA buttons ── */}
-        <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.9, duration: 0.55 }}
-          className="flex-shrink-0 flex flex-col sm:flex-row items-center justify-center gap-3 pb-12 px-4"
-        >
-          <Button
-            size="lg"
-            onClick={handlePlay}
-            className="h-11 min-w-[150px] rounded-md bg-primary px-6 font-semibold text-white shadow-glow transition-all duration-300 hover:scale-[1.05] hover:bg-primary/90 active:scale-[0.96] btn-red-glow"
-          >
-            <Play className="mr-2" size={16} fill="currentColor" />
-            Watch Film
-          </Button>
-          <Button
-            size="lg"
-            variant="outline"
-            onClick={() =>
-              document.getElementById("video-rows")?.scrollIntoView({ behavior: "smooth" })
-            }
-            className="h-11 min-w-[148px] rounded-md border-white/18 bg-white/5 px-6 text-white transition-all duration-300 hover:scale-[1.05] hover:border-white/38 hover:bg-white/10 hover:text-white active:scale-[0.96]"
-          >
-            Explore Projects
-            <ArrowRight className="ml-2" size={16} />
-          </Button>
-        </motion.div>
-      </motion.div>
-
-      {/* ─── Mobile arrows ─── */}
-      {N > 1 && (
-        <>
-          <button
-            onClick={goPrev}
-            aria-label="Previous"
-            className="sm:hidden absolute left-3 top-1/2 -translate-y-1/2 z-20 h-10 w-10 flex items-center justify-center rounded-full border border-white/14 bg-black/65 text-white backdrop-blur-sm"
-          >
-            <ChevronLeft size={19} />
-          </button>
-          <button
-            onClick={goNext}
-            aria-label="Next"
-            className="sm:hidden absolute right-3 top-1/2 -translate-y-1/2 z-20 h-10 w-10 flex items-center justify-center rounded-full border border-white/14 bg-black/65 text-white backdrop-blur-sm"
-          >
-            <ChevronRight size={19} />
-          </button>
-        </>
-      )}
-
-      {/* ─── Bottom dot controls ─── */}
-      {N > 1 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.05, duration: 0.6 }}
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3.5"
-        >
-          {/* Counter */}
-          <AnimatePresence mode="wait">
-            <motion.span
-              key={activeIdx}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -5 }}
-              transition={{ duration: 0.24 }}
-              className="font-orbitron text-[11px] text-white/28 tracking-[0.26em] select-none"
-            >
-              {String(activeIdx + 1).padStart(2, "0")} /{" "}
-              {String(N).padStart(2, "0")}
-            </motion.span>
-          </AnimatePresence>
-
-          {/* Pause/play with progress ring */}
-          <div className="relative w-[34px] h-[34px] flex items-center justify-center">
-            <ProgressRing
-              paused={paused}
-              dur={AUTO_MS}
-              ringKey={`ring-${activeIdx}-${paused ? "p" : "r"}`}
-            />
-            <button
-              onClick={() => setPaused((c) => !c)}
-              aria-label={paused ? "Resume slideshow" : "Pause slideshow"}
-              className="absolute inset-0 grid place-items-center rounded-full text-white transition-colors hover:text-primary focus:outline-none"
-            >
-              {paused ? (
-                <Play size={11} fill="currentColor" />
-              ) : (
-                <Pause size={11} fill="currentColor" />
-              )}
-            </button>
-          </div>
-
-          {/* Dots */}
-          <div className="flex items-center gap-1.5">
-            {slides.map((s, i) => (
-              <button
-                key={s.id}
-                onClick={() => goTo(i)}
-                aria-label={`Go to slide ${i + 1}`}
-                className="focus:outline-none"
+            {N > 1 && (
+              <motion.div
+                className="flex flex-shrink-0 items-end justify-start gap-0.5 sm:gap-1.5 lg:gap-2"
+                style={{ width: "clamp(52px, 17vw, 300px)" }}
+                initial={{ opacity: 0, x: 16 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.55, delay: 0.2 }}
               >
-                <motion.span
-                  animate={{
-                    width: i === activeIdx ? 24 : 6,
-                    backgroundColor:
-                      i === activeIdx
-                        ? "hsl(var(--primary))"
-                        : "rgba(255,255,255,0.20)",
-                  }}
-                  transition={{ duration: 0.3, ease: "easeInOut" }}
-                  className="block h-1.5 rounded-full"
-                />
-              </button>
-            ))}
-          </div>
+                <div className="min-w-0 flex-1">
+                  <p className="mb-1 hidden text-center text-[9px] font-semibold uppercase tracking-[0.28em] text-white/38 sm:mb-1.5 sm:block">
+                    Up Next
+                  </p>
+                  <SideCard
+                    key={`r1-${rightIdxs[0]}`}
+                    video={slides[rightIdxs[0]]}
+                    dist={1}
+                    side="right"
+                    onClick={() => goTo(rightIdxs[0])}
+                    delay={0.34}
+                    interactive={sideCardsInteractive}
+                  />
+                </div>
+                {N > 2 && (
+                  <div key={`r2-${rightIdxs[1]}`} className="block" style={{ width: "36%" }}>
+                    <SideCard
+                      video={slides[rightIdxs[1]]}
+                      dist={2}
+                      side="right"
+                      onClick={() => goTo(rightIdxs[1])}
+                      delay={0.42}
+                      interactive={sideCardsInteractive}
+                    />
+                  </div>
+                )}
+                {N > 3 && (
+                  <div key={`r3-${rightIdxs[2]}`} className="block" style={{ width: "26%" }}>
+                    <SideCard
+                      video={slides[rightIdxs[2]]}
+                      dist={3}
+                      side="right"
+                      onClick={() => goTo(rightIdxs[2])}
+                      delay={0.5}
+                      interactive={sideCardsInteractive}
+                    />
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </motion.div>
         </motion.div>
-      )}
 
-      {/* ─── Scroll cue ─── */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 2, duration: 0.8 }}
-        className="absolute bottom-5 hidden md:flex flex-col items-center gap-1.5 text-white/26"
-        style={{
-          left: "50%",
-          transform: "translateX(calc(-50% + 190px))",
-        }}
-      >
-        <span className="text-[8px] uppercase tracking-[0.33em]">Scroll</span>
-        <div className="w-5 h-8 rounded-full border border-white/18 flex items-start justify-center pt-1.5">
-          <motion.div
-            animate={{ y: [0, 10, 0], opacity: [0.65, 0.08, 0.65] }}
-            transition={{ duration: 1.9, repeat: Infinity, ease: "easeInOut" }}
-            className="w-0.5 h-2 rounded-full bg-white/44"
-          />
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.85, duration: 0.5 }}
+          className="relative z-10 flex w-full flex-shrink-0 flex-col items-center gap-5 px-4 pb-10 sm:gap-6 sm:pb-12"
+        >
+          <motion.div className="flex w-full max-w-md flex-col items-stretch gap-3 sm:max-w-none sm:flex-row sm:items-center sm:justify-center sm:gap-4">
+            <Button
+              size="lg"
+              onClick={handlePlay}
+              className="h-11 w-full rounded-md bg-primary px-6 font-semibold text-white shadow-glow transition-all duration-300 hover:scale-[1.03] hover:bg-primary/90 active:scale-[0.97] btn-red-glow sm:min-w-[160px] sm:w-auto"
+            >
+              <Play className="mr-2" size={16} fill="currentColor" />
+              Watch Film
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={() =>
+                document.getElementById("video-rows")?.scrollIntoView({ behavior: "smooth" })
+              }
+              className="h-11 w-full rounded-md border-white/18 bg-white/5 px-6 text-white transition-all duration-300 hover:scale-[1.03] hover:border-white/38 hover:bg-white/10 hover:text-white active:scale-[0.97] sm:min-w-[168px] sm:w-auto"
+            >
+              Explore Projects
+              <ArrowRight className="ml-2" size={16} />
+            </Button>
+          </motion.div>
+
+          {N > 1 && (
+            <div className="flex w-full flex-col items-center">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1, duration: 0.5 }}
+              className="flex items-center justify-center gap-4 rounded-full border border-white/10 bg-black/55 px-5 py-2.5 backdrop-blur-md"
+            >
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={activeIdx}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.2 }}
+                  className="min-w-[3.25rem] font-orbitron text-[11px] tracking-[0.22em] text-white/40 select-none tabular-nums"
+                >
+                  {String(activeIdx + 1).padStart(2, "0")} / {String(N).padStart(2, "0")}
+                </motion.span>
+              </AnimatePresence>
+
+              <div className="relative flex h-[34px] w-[34px] items-center justify-center">
+                <ProgressRing
+                  paused={paused}
+                  dur={AUTO_MS}
+                  ringKey={`ring-${activeIdx}-${paused ? "p" : "r"}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setPaused((c) => !c)}
+                  aria-label={paused ? "Resume slideshow" : "Pause slideshow"}
+                  className="absolute inset-0 grid place-items-center rounded-full text-white transition-colors hover:text-primary focus:outline-none"
+                >
+                  {paused ? (
+                    <Play size={12} fill="currentColor" className="ml-0.5" />
+                  ) : (
+                    <SlideshowPauseIcon />
+                  )}
+                </button>
+              </div>
+
+              <motion.div className="flex items-center gap-1.5" aria-hidden={isMobile}>
+                {slides.map((s, i) =>
+                  isMobile ? (
+                    <motion.span
+                      key={s.id}
+                      animate={{
+                        width: i === activeIdx ? 22 : 6,
+                        backgroundColor:
+                          i === activeIdx ? "rgb(239, 68, 68)" : "rgba(255,255,255,0.22)",
+                      }}
+                      transition={{ duration: 0.3, ease: "easeInOut" }}
+                      className="block h-1.5 rounded-full"
+                    />
+                  ) : (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => goTo(i)}
+                      aria-label={`Go to slide ${i + 1}`}
+                      className="focus:outline-none"
+                    >
+                      <motion.span
+                        animate={{
+                          width: i === activeIdx ? 22 : 6,
+                          backgroundColor:
+                            i === activeIdx ? "rgb(239, 68, 68)" : "rgba(255,255,255,0.22)",
+                        }}
+                        transition={{ duration: 0.3, ease: "easeInOut" }}
+                        className="block h-1.5 rounded-full"
+                      />
+                    </button>
+                  )
+                )}
+              </motion.div>
+            </motion.div>
+            <HeroScrollCue onClick={scrollToVideos} />
+            </div>
+          )}
+        </motion.div>
       </motion.div>
     </section>
   );

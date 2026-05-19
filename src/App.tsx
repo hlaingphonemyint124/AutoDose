@@ -3,8 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "@/hooks/useTheme";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import ScrollProgressBar from "@/components/ScrollProgressBar";
 import Index from "./pages/Index";
 import Contact from "./pages/Contact";
@@ -22,82 +21,10 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      staleTime: 1000 * 60 * 5, // 5 minutes
+      staleTime: 1000 * 60 * 5,
     },
   },
 });
-
-const pageVariants = {
-  initial: { opacity: 0, y: 20 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -20 },
-};
-
-const pageTransition = { duration: 0.3 };
-
-const AnimatedRoutes = () => {
-  const location = useLocation();
-
-  return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
-        <Route
-          path="/"
-          element={
-            <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-              <Index />
-            </motion.div>
-          }
-        />
-        <Route
-          path="/gallery"
-          element={
-            <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-              <Gallery />
-            </motion.div>
-          }
-        />
-        <Route
-          path="/about"
-          element={
-            <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-              <About />
-            </motion.div>
-          }
-        />
-        <Route
-          path="/contact"
-          element={
-            <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-              <Contact />
-            </motion.div>
-          }
-        />
-        <Route
-          path="/videos"
-          element={
-            <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-              <Videos />
-            </motion.div>
-          }
-        />
-        <Route path="/auth" element={<Auth />} />
-        <Route path="/profile-settings" element={<ProfileSettings />} />
-        <Route path="/account-settings" element={<AccountSettings />} />
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route
-          path="/stories/:slug"
-          element={
-            <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
-              <PhotoStory />
-            </motion.div>
-          }
-        />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </AnimatePresence>
-  );
-};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -107,7 +34,19 @@ const App = () => (
         <Sonner />
         <ScrollProgressBar />
         <BrowserRouter>
-          <AnimatedRoutes />
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/gallery" element={<Gallery />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/videos" element={<Videos />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/profile-settings" element={<ProfileSettings />} />
+            <Route path="/account-settings" element={<AccountSettings />} />
+            <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/stories/:slug" element={<PhotoStory />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
         </BrowserRouter>
       </TooltipProvider>
     </ThemeProvider>

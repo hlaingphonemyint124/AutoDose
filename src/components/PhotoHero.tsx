@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
+﻿import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { Camera, ArrowRight, Image as ImageIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { Camera, ArrowRight, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -13,6 +13,11 @@ interface HeroPhoto {
 }
 
 const ROTATE_MS = 6500;
+
+function wrapIndex(i: number, len: number): number {
+  if (len < 1) return 0;
+  return ((i % len) + len) % len;
+}
 
 const PhotoHero = () => {
   const [photos, setPhotos] = useState<HeroPhoto[]>([]);
@@ -55,15 +60,28 @@ const PhotoHero = () => {
         list = latest ?? [];
       }
       setPhotos(list);
+      setIndex(0);
+      setPrevIndex(null);
       setLoading(false);
     };
     fetchPhotos();
   }, []);
 
-  const goTo = useCallback((next: number) => {
-    setPrevIndex(index);
-    setIndex(next);
-  }, [index]);
+  const goTo = useCallback(
+    (next: number) => {
+      if (photos.length < 1) return;
+      const from = wrapIndex(index, photos.length);
+      const safeNext = wrapIndex(next, photos.length);
+      setPrevIndex(from);
+      setIndex(safeNext);
+    },
+    [index, photos.length]
+  );
+
+  useEffect(() => {
+    if (photos.length < 1) return;
+    setIndex((i) => wrapIndex(i, photos.length));
+  }, [photos.length]);
 
   useEffect(() => {
     if (photos.length < 2) return;
@@ -86,13 +104,19 @@ const PhotoHero = () => {
   }
   if (photos.length === 0) return null;
 
-  const current = photos[index];
+  const safeIndex = wrapIndex(index, photos.length);
+  const current = photos[safeIndex];
+  if (!current) return null;
 
   return (
     <section className="relative h-[88svh] min-h-[680px] max-h-[920px] w-full overflow-hidden bg-black">
       {/* Previous photo fading out */}
       <AnimatePresence>
-        {prevIndex !== null && prevIndex !== index && photos[prevIndex] && (
+        {prevIndex !== null &&
+          prevIndex >= 0 &&
+          prevIndex < photos.length &&
+          prevIndex !== safeIndex &&
+          photos[prevIndex] && (
           <motion.img
             key={`prev-${photos[prevIndex].id}`}
             src={photos[prevIndex].storage_url}
@@ -107,7 +131,7 @@ const PhotoHero = () => {
         )}
       </AnimatePresence>
 
-      {/* Current photo — Ken Burns slow zoom */}
+      {/* Current photo â€” Ken Burns slow zoom */}
       <AnimatePresence>
         <motion.img
           key={`photo-${current.id}`}
@@ -132,7 +156,7 @@ const PhotoHero = () => {
       <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/40 to-transparent" />
 
       {/* Content */}
-      <div className="relative z-10 h-full flex items-end pb-24 md:pb-28 px-4 sm:px-6 md:px-12">
+      <motion.div className="relative z-10 flex h-full flex-col justify-end px-4 pb-28 sm:px-6 sm:pb-32 md:px-12 md:pb-36">
         <AnimatePresence mode="wait">
           <motion.div
             key={current.id + "-text"}
@@ -150,7 +174,7 @@ const PhotoHero = () => {
             >
               <Camera size={13} />
               Featured Photography
-              {current.category && <span className="text-white/50">· {current.category}</span>}
+              {current.category && <span className="text-white/50">Â· {current.category}</span>}
             </motion.span>
 
             <h2 className="text-3xl sm:text-5xl md:text-6xl font-orbitron font-bold text-white leading-tight drop-shadow-lg">
@@ -158,7 +182,7 @@ const PhotoHero = () => {
             </h2>
 
             <p className="text-sm sm:text-base md:text-lg text-white/75 max-w-xl drop-shadow">
-              Step into the AUTODOSE gallery — a curated collection of JDM photography capturing
+              Step into the AUTODOSE gallery â€” a curated collection of JDM photography capturing
               speed, style and Japanese automotive soul.
             </p>
 
@@ -190,51 +214,29 @@ const PhotoHero = () => {
             </motion.div>
           </motion.div>
         </AnimatePresence>
-      </div>
+      </motion.div>
 
-      {/* Prev / Next arrows */}
       {photos.length > 1 && (
-        <>
-          <button
-            onClick={() => goTo((index - 1 + photos.length) % photos.length)}
-            className="absolute left-4 top-1/2 -translate-y-1/2 z-20 md:left-6 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 border border-white/15 text-white hover:bg-primary hover:border-primary transition-all duration-200 hover:scale-110 active:scale-90 opacity-0 hover:opacity-100 focus:opacity-100"
-            style={{ opacity: undefined }}
-            aria-label="Previous photo"
-          >
-            <ChevronLeft size={20} />
-          </button>
-          <button
-            onClick={() => goTo((index + 1) % photos.length)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 z-20 md:right-6 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 border border-white/15 text-white hover:bg-primary hover:border-primary transition-all duration-200 hover:scale-110 active:scale-90"
-            aria-label="Next photo"
-          >
-            <ChevronRight size={20} />
-          </button>
-        </>
-      )}
-
-      {/* Indicator dots + counter */}
-      {photos.length > 1 && (
-        <div className="absolute bottom-6 right-4 sm:right-6 md:right-12 z-20 flex items-center gap-3">
-          <span className="font-orbitron text-xs text-white/35 tracking-widest">
-            {String(index + 1).padStart(2, "0")}/{String(photos.length).padStart(2, "0")}
+        <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-center justify-center gap-4 rounded-full border border-white/10 bg-black/55 px-5 py-2.5 backdrop-blur-md sm:bottom-8">
+          <span className="min-w-[3.25rem] font-orbitron text-[11px] tracking-[0.22em] text-white/40 tabular-nums">
+            {String(safeIndex + 1).padStart(2, "0")} / {String(photos.length).padStart(2, "0")}
           </span>
           <div className="flex gap-1.5">
             {photos.map((_, i) => (
               <button
                 key={i}
+                type="button"
                 onClick={() => goTo(i)}
                 aria-label={`Show photo ${i + 1}`}
                 className="focus:outline-none"
               >
                 <motion.span
                   animate={{
-                    width: i === index ? 28 : 7,
-                    backgroundColor: i === index ? "hsl(var(--primary))" : "rgba(255,255,255,0.28)",
+                    width: i === safeIndex ? 22 : 6,
+                    backgroundColor: i === safeIndex ? "rgb(239, 68, 68)" : "rgba(255,255,255,0.22)",
                   }}
                   transition={{ duration: 0.35, ease: "easeInOut" }}
                   className="block h-1.5 rounded-full"
-                  whileHover={{ backgroundColor: "rgba(255,255,255,0.55)" }}
                 />
               </button>
             ))}
