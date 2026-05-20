@@ -1,4 +1,4 @@
-import { Instagram, Youtube, Mail, Facebook, X as XIcon, ArrowUp, MapPin, Clock } from "lucide-react";
+import { Instagram, Youtube, Mail, Facebook, ArrowUp, MapPin, Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
@@ -8,11 +8,10 @@ const Footer = () => {
   const inView = useInView(ref, { once: true, amount: 0.15 });
 
   const socialLinks = [
-    { icon: Instagram, href: "#", label: "Instagram", color: "hover:text-pink-400 hover:border-pink-400/40" },
-    { icon: Youtube,   href: "#", label: "YouTube",   color: "hover:text-red-500 hover:border-red-500/40" },
-    { icon: XIcon,     href: "#", label: "X (Twitter)", color: "hover:text-sky-400 hover:border-sky-400/40" },
-    { icon: Facebook,  href: "#", label: "Facebook",  color: "hover:text-blue-400 hover:border-blue-400/40" },
-    { icon: Mail, href: "mailto:contact@autodose.com", label: "Email", color: "hover:text-primary hover:border-primary/40" },
+    { icon: Instagram, href: "https://www.instagram.com/autodose.mm/", label: "Instagram", color: "hover:text-pink-400 hover:border-pink-400/40" },
+    { icon: Youtube,   href: "https://www.youtube.com/@autodosemm", label: "YouTube",   color: "hover:text-red-500 hover:border-red-500/40" },
+    { icon: Facebook,  href: "https://web.facebook.com/autodosemm/", label: "Facebook",  color: "hover:text-blue-400 hover:border-blue-400/40" },
+    { icon: Mail, href: "mailto:autodose.mm@gmail.com", label: "Email", color: "hover:text-primary hover:border-primary/40" },
   ];
 
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
@@ -68,6 +67,8 @@ const Footer = () => {
                   key={social.label}
                   href={social.href}
                   aria-label={social.label}
+                  target={social.href.startsWith("http") ? "_blank" : undefined}
+                  rel={social.href.startsWith("http") ? "noopener noreferrer" : undefined}
                   initial={{ opacity: 0, y: 8 }}
                   animate={inView ? { opacity: 1, y: 0 } : {}}
                   transition={{ duration: 0.4, delay: 0.35 + i * 0.07 }}
@@ -128,11 +129,11 @@ const Footer = () => {
             <ul className="space-y-3 text-sm text-muted-foreground">
               <li>
                 <a
-                  href="mailto:contact@autodose.com"
+                  href="mailto:autodose.mm@gmail.com"
                   className="hover:text-primary transition-colors flex items-center gap-2 group"
                 >
                   <Mail size={13} className="text-primary/60 group-hover:text-primary transition-colors" />
-                  contact@autodose.com
+                  autodose.mm@gmail.com
                 </a>
               </li>
               <li className="pt-3">

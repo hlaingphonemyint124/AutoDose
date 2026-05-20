@@ -6,7 +6,7 @@ import HomeVideoRows from "@/components/HomeVideoRows";
 import PhotoHero from "@/components/PhotoHero";
 import LatestPhotosRow from "@/components/LatestPhotosRow";
 import Footer from "@/components/Footer";
-import CinematicShowcase from "@/components/CinematicShowcase";
+import OurServices from "@/components/OurServices";
 import { RowVideo } from "@/components/VideoRow";
 
 const Index = () => {
@@ -43,7 +43,7 @@ const Index = () => {
           />
         </div>
 
-        <CinematicShowcase />
+        <OurServices />
 
         {/* Photo Hero slideshow */}
         <PhotoHero />

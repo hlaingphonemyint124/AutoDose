@@ -36,15 +36,15 @@ const Contact = () => {
   };
 
   const contactItems = [
-    { icon: Mail, label: "Email", value: "contact@autodose.com", href: "mailto:contact@autodose.com" },
+    { icon: Mail, label: "Email", value: "autodose.mm@gmail.com", href: "mailto:autodose.mm@gmail.com" },
     { icon: Phone, label: "Phone", value: "+1 (555) 123-4567", href: "tel:+15551234567" },
-    { icon: MapPin, label: "Location", value: "Tokyo, Japan", href: "#" },
+    { icon: MapPin, label: "Location", value: "Yangon, Myanmar", href: "#" },
   ];
 
   const socials = [
-    { icon: Instagram, label: "Instagram", href: "#", color: "hover:text-pink-400" },
-    { icon: Youtube, label: "YouTube", href: "#", color: "hover:text-red-500" },
-    { icon: Mail, label: "Email", href: "mailto:contact@autodose.com", color: "hover:text-primary" },
+    { icon: Instagram, label: "Instagram", href: "https://www.instagram.com/autodose.mm/", color: "hover:text-pink-400" },
+    { icon: Youtube, label: "YouTube", href: "https://www.youtube.com/@autodosemm", color: "hover:text-red-500" },
+    { icon: Mail, label: "Email", href: "mailto:autodose.mm@gmail.com", color: "hover:text-primary" },
   ];
 
   return (
