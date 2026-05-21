@@ -1,79 +1,193 @@
-import { useRef, useState } from "react";
-import { motion, useInView, AnimatePresence } from "framer-motion";
+"use client";
+import React, { useEffect, useRef, useState, memo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Camera, Aperture, Play, ShoppingCart, ArrowRight, Battery } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+
+// ─── Asset paths (Vite static imports) ───────────────────────────────────────
+const autoDoseLogo = "/src/assets/autodose.png";
 
 const IMAGES = {
-  elite: "src/assets/rx8.jpg",
-  motion: "src/assets/aristo.jpg",
-  lifestyle: "src/assets/lifestyle.jpg",
-  shop: "src/assets/shop.png",
+  elite:     "/src/assets/rx8.jpg",
+  motion:    "/src/assets/aristo.jpg",
+  lifestyle: "/src/assets/lifestyle.jpg",
+  shop:      "/src/assets/shop.png",
 };
 
+// ─── Services data ────────────────────────────────────────────────────────────
 const services = [
   {
-    id: "01",
-    titleWhite: "ELITE",
-    titleRed: "CAPTURE",
+    id: "01", titleWhite: "ELITE",     titleRed: "CAPTURE",
     description: "JDM AND SUPERCAR PHOTOGRAPHY",
-    icon: Camera,
     tagline: "PRECISION. LIGHT. PERFORMANCE.",
-    image: IMAGES.elite,
-    route: "/gallery",
+    image: IMAGES.elite,     route: "/gallery",
   },
   {
-    id: "02",
-    titleWhite: "MOTION",
-    titleRed: "MASTERY",
+    id: "02", titleWhite: "MOTION",    titleRed: "MASTERY",
     description: "CINEMATIC ROLLING SHOTS THAT BRING SPEED TO LIFE",
-    icon: Aperture,
     tagline: "MOVEMENT. ENERGY. IMPACT.",
-    image: IMAGES.motion,
-    route: "/videos",
+    image: IMAGES.motion,    route: "/videos",
   },
   {
-    id: "03",
-    titleWhite: "LIFESTYLE",
-    titleRed: "VLOGS",
+    id: "03", titleWhite: "LIFESTYLE", titleRed: "VLOGS",
     description: "WEEKLY CAR CULTURE UPDATES & BEHIND THE SCENES",
-    icon: Play,
     tagline: "REAL PEOPLE. REAL CARS. REAL STORIES.",
-    image: IMAGES.lifestyle,
-    isVlog: true,
-    route: "/videos",
+    image: IMAGES.lifestyle, isVlog: true, route: "/videos",
   },
   {
-    id: "04",
-    titleWhite: "AUTODOSE",
-    titleRed: "SHOP",
+    id: "04", titleWhite: "AUTODOSE",  titleRed: "SHOP",
     description: "PREMIUM CAR PARTS. CURATED FOR PERFORMANCE.",
-    icon: ShoppingCart,
     tagline: "UPGRADE. CUSTOMIZE. DOMINATE.",
-    image: IMAGES.shop,
-    comingSoon: true,
-    route: "/shop",
+    image: IMAGES.shop, comingSoon: true, route: "/shop",
   },
-];
+] as const;
 
-/* ── Animated glow border ── */
-const GlowBorder = ({ isHovered }) => (
+type Service = typeof services[number];
+
+// ─── Neural Noise WebGL Background ───────────────────────────────────────────
+const NeuralNoiseBg = memo(() => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const gl = (
+      canvas.getContext("webgl") || canvas.getContext("experimental-webgl")
+    ) as WebGLRenderingContext | null;
+    if (!gl) return;
+
+    const vsSource = `
+      precision mediump float;
+      varying vec2 vUv;
+      attribute vec2 a_position;
+      void main(){vUv=0.5*(a_position+1.0);gl_Position=vec4(a_position,0.0,1.0);}
+    `;
+    const fsSource = `
+      precision mediump float;
+      varying vec2 vUv;
+      uniform float u_time;
+      uniform float u_ratio;
+      uniform vec2 u_pointer_position;
+      uniform vec3 u_color;
+      uniform float u_speed;
+      vec2 rotate(vec2 uv,float th){return mat2(cos(th),sin(th),-sin(th),cos(th))*uv;}
+      float neuro_shape(vec2 uv,float t,float p){
+        vec2 sine_acc=vec2(0.0);vec2 res=vec2(0.0);float scale=8.0;
+        for(int j=0;j<15;j++){
+          uv=rotate(uv,1.0);sine_acc=rotate(sine_acc,1.0);
+          vec2 layer=uv*scale+float(j)+sine_acc-t;
+          sine_acc+=sin(layer)+2.4*p;
+          res+=(0.5+0.5*cos(layer))/scale;
+          scale*=1.2;
+        }
+        return res.x+res.y;
+      }
+      void main(){
+        vec2 uv=0.5*vUv;uv.x*=u_ratio;
+        vec2 pointer=vUv-u_pointer_position;pointer.x*=u_ratio;
+        float p=clamp(length(pointer),0.0,1.0);p=0.5*pow(1.0-p,2.0);
+        float t=u_speed*u_time;
+        float noise=neuro_shape(uv,t,p);
+        noise=1.2*pow(noise,3.0);
+        noise+=pow(noise,10.0);
+        noise=max(0.0,noise-0.5);
+        noise*=(1.0-length(vUv-0.5));
+        gl_FragColor=vec4(u_color*noise,noise);
+      }
+    `;
+
+    function mkShader(src: string, type: number) {
+      const s = gl!.createShader(type)!;
+      gl!.shaderSource(s, src);
+      gl!.compileShader(s);
+      return s;
+    }
+
+    const prog = gl.createProgram()!;
+    gl.attachShader(prog, mkShader(vsSource, gl.VERTEX_SHADER));
+    gl.attachShader(prog, mkShader(fsSource, gl.FRAGMENT_SHADER));
+    gl.linkProgram(prog);
+    gl.useProgram(prog);
+
+    const uniforms: Record<string, WebGLUniformLocation | null> = {};
+    const uc = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS) as number;
+    for (let i = 0; i < uc; i++) {
+      const n = gl.getActiveUniform(prog, i)!.name;
+      uniforms[n] = gl.getUniformLocation(prog, n);
+    }
+
+    const verts = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+    const posLoc = gl.getAttribLocation(prog, "a_position");
+    gl.enableVertexAttribArray(posLoc);
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+    gl.uniform3f(uniforms.u_color, 0.86, 0.15, 0.15);
+    gl.uniform1f(uniforms.u_speed, 0.0008);
+
+    const pointer = { x: 0.5, y: 0.5, tX: 0.5, tY: 0.5 };
+
+    function resize() {
+      const parent = canvas!.parentElement!;
+      canvas!.width  = parent.offsetWidth;
+      canvas!.height = parent.offsetHeight;
+      gl!.uniform1f(uniforms.u_ratio, canvas!.width / canvas!.height);
+      gl!.viewport(0, 0, canvas!.width, canvas!.height);
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    const onMove = (e: PointerEvent) => {
+      pointer.tX = e.clientX / window.innerWidth;
+      pointer.tY = e.clientY / window.innerHeight;
+    };
+    window.addEventListener("pointermove", onMove);
+
+    let raf: number;
+    function render() {
+      pointer.x += (pointer.tX - pointer.x) * 0.05;
+      pointer.y += (pointer.tY - pointer.y) * 0.05;
+      gl!.uniform1f(uniforms.u_time, performance.now());
+      gl!.uniform2f(uniforms.u_pointer_position, pointer.x, 1 - pointer.y);
+      gl!.drawArrays(gl!.TRIANGLE_STRIP, 0, 4);
+      raf = requestAnimationFrame(render);
+    }
+    render();
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", resize);
+      window.removeEventListener("pointermove", onMove);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      style={{ opacity: 0.85 }}
+    />
+  );
+});
+NeuralNoiseBg.displayName = "NeuralNoiseBg";
+
+// ─── Glow Border ─────────────────────────────────────────────────────────────
+const GlowBorder = ({ isHovered }: { isHovered: boolean }) => (
   <>
-    {/* Outer glow ring */}
     <motion.div
       className="pointer-events-none absolute inset-0 z-20"
       animate={{
         boxShadow: isHovered
           ? "0 0 0 1.5px #dc2626, 0 0 20px 3px rgba(220,38,38,0.5), 0 0 50px 8px rgba(220,38,38,0.18)"
-          : "0 0 0 1px rgba(220,38,38,0.18)",
+          : "0 0 0 1px rgba(220,38,38,0.2)",
       }}
       transition={{ duration: 0.4, ease: "easeOut" }}
     />
-
-    {/* SVG corner brackets */}
     {[
-      { cls: "top-0 left-0", d: "M0 16 L0 0 L16 0" },
-      { cls: "top-0 right-0", d: "M16 16 L16 0 L0 0" },
-      { cls: "bottom-0 left-0", d: "M0 0 L0 16 L16 16" },
+      { cls: "top-0 left-0",     d: "M0 16 L0 0 L16 0" },
+      { cls: "top-0 right-0",    d: "M16 16 L16 0 L0 0" },
+      { cls: "bottom-0 left-0",  d: "M0 0 L0 16 L16 16" },
       { cls: "bottom-0 right-0", d: "M16 0 L16 16 L0 16" },
     ].map(({ cls, d }, i) => (
       <motion.span
@@ -87,8 +201,6 @@ const GlowBorder = ({ isHovered }) => (
         </svg>
       </motion.span>
     ))}
-
-    {/* Scan line sweep */}
     <AnimatePresence>
       {isHovered && (
         <motion.div
@@ -100,8 +212,6 @@ const GlowBorder = ({ isHovered }) => (
         />
       )}
     </AnimatePresence>
-
-    {/* Bottom red line reveal */}
     <motion.div
       className="pointer-events-none absolute bottom-0 left-0 h-[2px] z-30"
       style={{ background: "linear-gradient(to right, #dc2626, #ef4444, transparent)" }}
@@ -111,219 +221,135 @@ const GlowBorder = ({ isHovered }) => (
   </>
 );
 
-/* ── Service Card ── */
-const ServiceCard = ({ service, index }) => {
+// ─── Orbital Service Card ─────────────────────────────────────────────────────
+interface ServiceCardProps {
+  service: Service;
+  x: number;
+  y: number;
+}
+
+const OrbitServiceCard = memo(({ service, x, y }: ServiceCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
 
   const handleClick = () => {
     if (service.comingSoon) return;
-    setTimeout(() => navigate(service.route), 250);
+    setTimeout(() => navigate(service.route), 240);
   };
 
   return (
-    <motion.div
-      variants={{
-        hidden: { opacity: 0, y: 40, scale: 0.96 },
-        show: {
-          opacity: 1, y: 0, scale: 1,
-          transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: index * 0.12 },
-        },
-      }}
-      className="relative overflow-hidden w-full"
+    <div
+      className="absolute top-1/2 left-1/2"
       style={{
-        background: "#060606",
-        cursor: service.comingSoon ? "default" : "pointer",
-        aspectRatio: "16 / 9",
+        transform: `translate(calc(${x}px - 50%), calc(${y}px - 50%))`,
+        zIndex: isHovered ? 30 : 10,
+        transition: "z-index 0s",
       }}
-      onHoverStart={() => setIsHovered(true)}
-      onHoverEnd={() => setIsHovered(false)}
-      onClick={handleClick}
-      whileTap={!service.comingSoon ? { scale: 0.975 } : {}}
     >
-      <GlowBorder isHovered={isHovered} />
-
-      {/* ── Background image ── */}
-      <div className="absolute inset-0 z-0">
-        <motion.img
-          src={service.image}
-          alt=""
-          className="w-full h-full object-cover"
-          animate={{ scale: isHovered ? 1.08 : 1 }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-        />
-
-        {/* Strong gradient — bottom 60% black so text is always readable */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(to top, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.85) 35%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.15) 100%)",
-          }}
-        />
-        {/* Left vignette for ID/title area */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(to right, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.2) 50%, transparent 100%)",
-          }}
-        />
-        {/* Red tint on hover */}
-        <motion.div
-          className="absolute inset-0 bg-red-950/15"
-          animate={{ opacity: isHovered ? 1 : 0 }}
-          transition={{ duration: 0.5 }}
-        />
-      </div>
-
-      {/* ── COMING SOON ribbon ── */}
-      {service.comingSoon && (
-        <div
-          className="absolute top-5 -right-10 z-40 w-40 rotate-45 py-1 text-center text-[8px] font-black tracking-[0.25em] text-white uppercase"
-          style={{ background: "#dc2626", boxShadow: "0 0 14px rgba(220,38,38,0.6)" }}
-        >
-          COMING SOON
-        </div>
-      )}
-
-      {/* ── REC badge ── */}
-      {service.isVlog && (
-        <div className="absolute top-4 right-4 z-30 flex items-center gap-1.5 font-mono text-[9px] font-bold text-white bg-black/80 px-2 py-1 border border-white/10">
-          <motion.span
-            className="w-1.5 h-1.5 rounded-full bg-red-600 inline-block"
-            animate={{ opacity: [1, 0.15, 1] }}
-            transition={{ duration: 1.3, repeat: Infinity }}
-          />
-          REC
-        </div>
-      )}
-
-      {/* ── Top-right: number tag ── */}
-      <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5">
-        {!service.isVlog && !service.comingSoon && (
-          <motion.span
-            className="font-mono text-[10px] font-bold text-white/30 tracking-widest"
-            animate={{ opacity: isHovered ? 0.7 : 0.3 }}
-          >
-            {service.id}
-          </motion.span>
-        )}
-      </div>
-
-      {/* ── Card content — anchored to bottom ── */}
-      <div className="absolute inset-0 z-10 flex flex-col justify-end p-5 md:p-6">
-
-        {/* ID tag */}
-        <motion.div
-          className="flex items-center gap-2 mb-2.5"
-          animate={{ x: isHovered ? 3 : 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <span
-            className="text-red-600 font-black text-[10px] tracking-[0.3em]"
-            style={{ fontFamily: "'Orbitron', sans-serif" }}
-          >
-            {service.id}
-          </span>
-          <motion.div
-            className="h-px bg-red-600/50"
-            animate={{ width: isHovered ? 24 : 12 }}
-            transition={{ duration: 0.35 }}
-          />
-        </motion.div>
-
-        {/* Title — readable size, not oversized */}
-        <motion.h3
-          className="font-black italic uppercase leading-none mb-2 tracking-wide"
-          style={{
-            fontFamily: "'Orbitron', sans-serif",
-            fontSize: "clamp(1.05rem, 2.2vw, 1.45rem)",
-          }}
-          animate={{ x: isHovered ? 3 : 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <span className="text-white drop-shadow-[0_2px_8px_rgba(0,0,0,1)]">
-            {service.titleWhite}{" "}
-          </span>
-          <motion.span
-            style={{ color: "#dc2626" }}
-            animate={{
-              textShadow: isHovered
-                ? "0 0 14px rgba(220,38,38,0.9), 0 0 30px rgba(220,38,38,0.45)"
-                : "0 0 0px rgba(220,38,38,0)",
-            }}
-            transition={{ duration: 0.4 }}
-          >
-            {service.titleRed}
-          </motion.span>
-        </motion.h3>
-
-        {/* Description */}
-        <motion.p
-          className="text-zinc-400 uppercase leading-relaxed mb-4"
-          style={{ fontSize: "clamp(0.6rem, 1vw, 0.7rem)", letterSpacing: "0.18em" }}
-          animate={{ opacity: isHovered ? 1 : 0.6, x: isHovered ? 3 : 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          {service.description}
-        </motion.p>
-
-        {/* Bottom bar: icon + tagline + action */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <motion.div
-              className="p-1.5 bg-black/90 text-red-600 border"
-              animate={{
-                borderColor: isHovered ? "rgba(220,38,38,0.8)" : "rgba(220,38,38,0.22)",
-                boxShadow: isHovered ? "0 0 10px rgba(220,38,38,0.4)" : "none",
-              }}
-              transition={{ duration: 0.3 }}
-            >
-              <service.icon size={12} strokeWidth={2.5} />
-            </motion.div>
-            <span
-              className="text-zinc-500 font-semibold uppercase tracking-[0.18em]"
-              style={{ fontSize: "clamp(0.55rem, 0.9vw, 0.65rem)" }}
-            >
-              {service.tagline}
-            </span>
-          </div>
-
-          {service.isVlog ? (
-            <div className="flex items-center gap-2 text-zinc-400 font-mono" style={{ fontSize: "0.6rem" }}>
-              <span className="tracking-wider">00:00:12:07</span>
-              <Battery size={13} className="text-white/60" strokeWidth={1.5} />
-            </div>
-          ) : (
-            <motion.div
-              animate={{ x: isHovered ? 5 : 0, color: isHovered ? "#ef4444" : "rgba(255,255,255,0.7)" }}
-              transition={{ duration: 0.25 }}
-            >
-              <ArrowRight size={16} strokeWidth={2} />
-            </motion.div>
-          )}
-        </div>
-      </div>
-
-      {/* Hover: subtle red gradient wash from bottom */}
       <motion.div
-        className="absolute inset-x-0 bottom-0 z-10 h-1/3 pointer-events-none"
-        style={{ background: "linear-gradient(to top, rgba(220,38,38,0.08), transparent)" }}
-        animate={{ opacity: isHovered ? 1 : 0 }}
-        transition={{ duration: 0.4 }}
-      />
-    </motion.div>
-  );
-};
+        className="relative overflow-hidden w-[158px] bg-[#0a0a0a]"
+        style={{ cursor: service.comingSoon ? "default" : "pointer" }}
+        onHoverStart={() => setIsHovered(true)}
+        onHoverEnd={() => setIsHovered(false)}
+        onClick={handleClick}
+        whileTap={!service.comingSoon ? { scale: 0.975 } : {}}
+      >
+        <GlowBorder isHovered={isHovered} />
 
-/* ── CTA Button ── */
+        {/* Image */}
+        <div className="relative h-[80px] overflow-hidden">
+          <motion.img
+            src={service.image}
+            alt={service.titleWhite}
+            className="w-full h-full object-cover"
+            animate={{ scale: isHovered ? 1.1 : 1 }}
+            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+            style={{ filter: "brightness(0.7) saturate(0.85)" }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.3) 60%, transparent 100%)",
+            }}
+          />
+        </div>
+
+        {/* COMING SOON ribbon */}
+        {"comingSoon" in service && service.comingSoon && (
+          <div
+            className="absolute top-[8px] -right-[8px] z-40 bg-red-600 text-white text-[6.5px] font-black tracking-[.1em] uppercase py-[2px] px-[18px]"
+            style={{ transform: "rotate(45deg) translate(6px,-4px)" }}
+          >
+            COMING SOON
+          </div>
+        )}
+
+        {/* REC badge */}
+        {"isVlog" in service && service.isVlog && (
+          <div className="absolute top-[6px] right-[6px] z-30 flex items-center gap-1 bg-black/80 px-[6px] py-[3px] border border-white/10 text-[8px] font-bold text-white tracking-[.1em]">
+            <span
+              className="w-[5px] h-[5px] rounded-full bg-red-600"
+              style={{ animation: "blink 1.3s infinite" }}
+            />
+            REC
+          </div>
+        )}
+
+        {/* Body */}
+        <div className="p-[8px_10px_10px]">
+          <motion.div
+            className="text-red-600 font-black text-[8px] tracking-[.25em] mb-[3px]"
+            style={{ fontFamily: "'Orbitron', sans-serif" }}
+            animate={{ x: isHovered ? 2 : 0 }}
+          >
+            {service.id}
+          </motion.div>
+          <motion.h3
+            className="font-black italic uppercase leading-none mb-1 text-white text-[11px]"
+            style={{ fontFamily: "'Orbitron', sans-serif" }}
+            animate={{ x: isHovered ? 2 : 0 }}
+          >
+            {service.titleWhite}{" "}
+            <motion.span
+              style={{ color: "#dc2626" }}
+              animate={{
+                textShadow: isHovered ? "0 0 12px rgba(220,38,38,0.9)" : "none",
+              }}
+            >
+              {service.titleRed}
+            </motion.span>
+          </motion.h3>
+          <p className="text-zinc-600 uppercase text-[9px] tracking-[.12em] leading-[1.5]">
+            {service.description}
+          </p>
+        </div>
+
+        {/* Arrow */}
+        {!("comingSoon" in service && service.comingSoon) && (
+          <motion.div
+            className="absolute bottom-[8px] right-[8px] w-[20px] h-[20px] border border-red-800 flex items-center justify-center"
+            animate={{
+              borderColor: isHovered ? "#dc2626" : "rgba(220,38,38,0.35)",
+              background:  isHovered ? "rgba(220,38,38,0.15)" : "transparent",
+            }}
+          >
+            <ArrowRight size={10} className="text-red-600" />
+          </motion.div>
+        )}
+      </motion.div>
+    </div>
+  );
+});
+OrbitServiceCard.displayName = "OrbitServiceCard";
+
+// ─── CTA Button ───────────────────────────────────────────────────────────────
 const EpicButton = () => {
   const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
-  const [ripples, setRipples] = useState([]);
+  const [ripples, setRipples] = useState<{ x: number; y: number; id: number }[]>([]);
 
-  const handleClick = (e) => {
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const id = Date.now();
     setRipples((r) => [...r, { x: e.clientX - rect.left, y: e.clientY - rect.top, id }]);
@@ -337,16 +363,14 @@ const EpicButton = () => {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay: 0.5, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-      className="mt-12 flex justify-center"
+      className="mt-10 flex justify-center"
     >
       <motion.button
-        className="relative flex items-center justify-center gap-3 overflow-hidden px-10 py-3.5"
+        className="relative flex items-center justify-center gap-3 overflow-hidden px-10 py-3.5 border-none outline-none"
         style={{
-          background: "#dc2626",
-          clipPath: "polygon(14px 0%, 100% 0%, calc(100% - 14px) 100%, 0% 100%)",
+          clipPath: "polygon(14px 0%,100% 0%,calc(100% - 14px) 100%,0% 100%)",
           cursor: "pointer",
-          border: "none",
-          outline: "none",
+          background: "#dc2626",
         }}
         onHoverStart={() => setIsHovered(true)}
         onHoverEnd={() => setIsHovered(false)}
@@ -356,7 +380,7 @@ const EpicButton = () => {
         animate={{
           background: isHovered ? "#b91c1c" : "#dc2626",
           boxShadow: isHovered
-            ? "0 0 30px rgba(220,38,38,0.7), 0 0 70px rgba(220,38,38,0.25)"
+            ? "0 0 32px rgba(220,38,38,0.75), 0 0 75px rgba(220,38,38,0.28)"
             : "0 0 0px rgba(220,38,38,0)",
         }}
         transition={{ duration: 0.3 }}
@@ -371,19 +395,13 @@ const EpicButton = () => {
             transition={{ duration: 0.65, ease: "easeOut" }}
           />
         ))}
-
-        <motion.span
-          className="relative z-10 text-white"
-          animate={{ x: isHovered ? -1 : 0 }}
-          transition={{ duration: 0.2 }}
-        >
+        <motion.span className="relative z-10 text-white" animate={{ x: isHovered ? -1 : 0 }}>
           <svg width="11" height="11" viewBox="0 0 12 12" fill="white">
             <polygon points="2,1 11,6 2,11" />
           </svg>
         </motion.span>
-
         <span
-          className="relative z-10 text-white font-black italic tracking-[0.2em] uppercase text-[11px] md:text-xs"
+          className="relative z-10 text-white font-black italic tracking-[.2em] uppercase text-[11px]"
           style={{ fontFamily: "'Orbitron', sans-serif" }}
         >
           LET'S CREATE SOMETHING EPIC
@@ -393,110 +411,164 @@ const EpicButton = () => {
   );
 };
 
-/* ── Main Section ── */
-const OurServices = () => {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: "-60px" });
+// ─── Orbit Ring ───────────────────────────────────────────────────────────────
+const OrbitRing = ({ radius }: { radius: number }) => (
+  <div
+    className="absolute top-1/2 left-1/2 rounded-full pointer-events-none"
+    style={{
+      width: radius * 2,
+      height: radius * 2,
+      transform: "translate(-50%,-50%)",
+      border: "1px solid rgba(220,38,38,0.2)",
+      boxShadow: "0 0 40px rgba(220,38,38,0.08), inset 0 0 40px rgba(220,38,38,0.04)",
+      animation: "ringPulse 4s ease-in-out infinite",
+    }}
+  />
+);
+
+// ─── Main Section ─────────────────────────────────────────────────────────────
+const ORBIT_RADIUS = 200;
+const PHASES = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2];
+const SPEED  = 0.28;
+
+export default function OurServices() {
+  const [time, setTime]     = useState(0);
+  const [paused, setPaused] = useState(false);
+  const lastRef             = useRef<number | null>(null);
+
+  useEffect(() => {
+    let raf: number;
+    const tick = (ts: number) => {
+      if (lastRef.current !== null && !paused) {
+        setTime((t) => t + (ts - lastRef.current!) / 1000);
+      }
+      lastRef.current = ts;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [paused]);
 
   return (
     <section
-      className="relative w-full overflow-hidden py-20 lg:py-28 text-white"
-      style={{ background: "#0a0a0a" }}
+      className="relative w-full overflow-hidden py-16 lg:py-24 text-white"
+      style={{ background: "#060606", minHeight: "100vh" }}
     >
-      {/* Top red ambient glow */}
+      {/* Neural noise WebGL background */}
+      <NeuralNoiseBg />
+
+      {/* Soft radial red glow — no grid */}
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-72 z-0"
+        className="absolute inset-0 z-[1] pointer-events-none"
         style={{
           background:
-            "radial-gradient(ellipse 65% 55% at 50% 0%, rgba(220,38,38,0.08) 0%, transparent 70%)",
+            "radial-gradient(ellipse 70% 60% at 50% 52%, rgba(220,38,38,0.06) 0%, transparent 70%)",
         }}
       />
 
-      <div className="container relative z-10 mx-auto px-5 sm:px-8 max-w-6xl">
+      <div className="container relative z-10 mx-auto px-5 sm:px-8 max-w-3xl flex flex-col items-center">
 
         {/* ── Header ── */}
         <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          whileInView={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-3 mb-3"
+          initial={{ opacity: 0, scaleX: 0.4 }}
+          whileInView={{ opacity: 1, scaleX: 1 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="flex flex-col items-center mb-14 space-y-4"
+          transition={{ duration: 0.5 }}
         >
-          {/* Eyebrow — matches site style exactly */}
-          <motion.div
-            className="flex items-center gap-3"
-            initial={{ opacity: 0, scaleX: 0.5 }}
-            whileInView={{ opacity: 1, scaleX: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-          >
-            <div className="w-8 h-px bg-red-600" />
-            <span
-              className="text-red-600 font-bold italic text-[10px] tracking-[0.35em] uppercase"
-              style={{ fontFamily: "'Orbitron', sans-serif" }}
-            >
-              AUTODOSE
-            </span>
-            <div className="w-8 h-px bg-red-600" />
-          </motion.div>
-
-          {/* Main heading */}
-          <h2
-            className="text-4xl md:text-5xl lg:text-[3.5rem] font-black italic tracking-wide uppercase leading-none text-center"
+          <div className="w-7 h-px bg-red-600" />
+          <span
+            className="text-red-600 font-bold italic text-[10px] tracking-[.35em] uppercase"
             style={{ fontFamily: "'Orbitron', sans-serif" }}
           >
-            <motion.span
-              className="text-white"
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.55, delay: 0.2 }}
-            >
-              OUR{" "}
-            </motion.span>
-            <motion.span
-              style={{ color: "#dc2626", textShadow: "0 0 28px rgba(220,38,38,0.45)" }}
-              initial={{ opacity: 0, x: 20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.55, delay: 0.3 }}
-            >
-              SERVICES
-            </motion.span>
-          </h2>
-
-          <motion.p
-            className="text-zinc-500 text-[9px] tracking-[0.3em] uppercase text-center"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.4 }}
-          >
-            Built for car enthusiasts. Driven by passion.
-          </motion.p>
+            AUTODOSE
+          </span>
+          <div className="w-7 h-px bg-red-600" />
         </motion.div>
 
-        {/* ── Services Grid ── */}
-        <motion.div
-          ref={ref}
-          variants={{
-            hidden: { opacity: 0 },
-            show: { opacity: 1, transition: { staggerChildren: 0.12 } },
-          }}
-          initial="hidden"
-          animate={isInView ? "show" : "hidden"}
-          className="grid grid-cols-1 md:grid-cols-2 gap-3 lg:gap-4"
+        <motion.h2
+          className="text-4xl md:text-5xl font-black italic tracking-wide uppercase text-center leading-none mb-3"
+          style={{ fontFamily: "'Orbitron', sans-serif" }}
+          initial={{ opacity: 0, y: -10 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
         >
-          {services.map((service, i) => (
-            <ServiceCard key={service.id} service={service} index={i} />
-          ))}
-        </motion.div>
+          <span className="text-white">OUR </span>
+          <span style={{ color: "#dc2626", textShadow: "0 0 28px rgba(220,38,38,0.5)" }}>
+            SERVICES
+          </span>
+        </motion.h2>
+
+        <p className="text-zinc-600 text-[9px] tracking-[.28em] uppercase mb-10">
+          Built for car enthusiasts. Driven by passion.
+        </p>
+
+        {/* ── Orbit Stage ── */}
+        <div
+          className="relative"
+          style={{
+            width:  ORBIT_RADIUS * 2 + 200,
+            height: ORBIT_RADIUS * 2 + 200,
+            maxWidth: "100%",
+          }}
+          onMouseEnter={() => setPaused(true)}
+          onMouseLeave={() => setPaused(false)}
+        >
+          <OrbitRing radius={ORBIT_RADIUS} />
+          <OrbitRing radius={ORBIT_RADIUS * 0.58} />
+
+          {/* Center hub — AutoDose logo */}
+          <div
+            className="absolute top-1/2 left-1/2 z-20 flex items-center justify-center"
+            style={{
+              transform: "translate(-50%,-50%)",
+              width: 96,
+              height: 96,
+              borderRadius: "50%",
+              background: "radial-gradient(circle,#1a0808 0%,#060606 100%)",
+              border: "1.5px solid rgba(220,38,38,0.5)",
+              overflow: "hidden",
+              padding: 6,
+              animation: "hubPulse 3s ease-in-out infinite",
+            }}
+          >
+            <img
+              src={autoDoseLogo}
+              alt="AutoDose"
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+            />
+          </div>
+
+          {/* Orbiting cards */}
+          {services.map((service, i) => {
+            const angle = time * SPEED + PHASES[i];
+            const x = Math.cos(angle) * ORBIT_RADIUS;
+            const y = Math.sin(angle) * ORBIT_RADIUS;
+            return (
+              <OrbitServiceCard key={service.id} service={service} x={x} y={y} />
+            );
+          })}
+        </div>
 
         {/* ── CTA ── */}
         <EpicButton />
       </div>
+
+      <style>{`
+        @keyframes hubPulse {
+          0%,100% { box-shadow: 0 0 20px rgba(220,38,38,0.25), 0 0 40px rgba(220,38,38,0.1); }
+          50%      { box-shadow: 0 0 50px rgba(220,38,38,0.55), 0 0 90px rgba(220,38,38,0.2); }
+        }
+        @keyframes ringPulse {
+          0%,100% { box-shadow: 0 0 30px rgba(220,38,38,0.08), inset 0 0 30px rgba(220,38,38,0.04); }
+          50%      { box-shadow: 0 0 70px rgba(220,38,38,0.2),  inset 0 0 60px rgba(220,38,38,0.1);  }
+        }
+        @keyframes blink {
+          0%,100% { opacity: 1;    }
+          50%      { opacity: 0.15; }
+        }
+      `}</style>
     </section>
   );
-};
-
-export default OurServices;
+}
