@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { X, ZoomIn, ChevronLeft, ChevronRight } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -22,16 +22,66 @@ function distribute<T>(items: T[], cols: number): T[][] {
   return columns;
 }
 
+// ── Optimized image URL (Supabase transform API for mobile) ──────────────────
+function getOptimizedUrl(url: string, width: number): string {
+  try {
+    // If it's a Supabase storage URL, use the transform endpoint
+    if (url.includes("/storage/v1/object/public/")) {
+      const transformed = url.replace(
+        "/storage/v1/object/public/",
+        "/storage/v1/render/image/public/"
+      );
+      return `${transformed}?width=${width}&quality=75&format=webp`;
+    }
+  } catch (_) {}
+  return url;
+}
+
+// ── Intersection Observer hook for viewport-based loading ────────────────────
+function useInView(rootMargin = "200px") {
+  const ref = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setInView(true); observer.disconnect(); } },
+      { rootMargin }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [rootMargin]);
+
+  return { ref, inView };
+}
+
 // ── Photo tile ────────────────────────────────────────────────────────────────
-const PhotoTile = ({ photo, onClick }: { photo: Photo; onClick: () => void }) => {
+const PhotoTile = ({
+  photo,
+  onClick,
+  priority = false,
+}: {
+  photo: Photo;
+  onClick: () => void;
+  priority?: boolean;
+}) => {
   const [status, setStatus] = useState<"loading" | "loaded" | "error">("loading");
+  const { ref, inView } = useInView(priority ? "600px" : "200px");
+
+  // Priority images (first 6) start loading immediately
+  const shouldLoad = priority || inView;
+
+  // Use smaller thumbnail for grid, full res for lightbox
+  const thumbUrl = getOptimizedUrl(photo.storage_url, 600);
 
   return (
     <div
+      ref={ref}
       className="relative group cursor-pointer overflow-hidden rounded-xl bg-muted mb-3 md:mb-4"
       onClick={onClick}
     >
-      {/* Shimmer placeholder while loading */}
+      {/* Shimmer placeholder */}
       {status === "loading" && (
         <div className="shimmer w-full rounded-xl" style={{ paddingTop: "66.67%" }} />
       )}
@@ -55,20 +105,24 @@ const PhotoTile = ({ photo, onClick }: { photo: Photo; onClick: () => void }) =>
         </div>
       )}
 
-      {/* Actual image */}
-      <img
-        src={photo.storage_url}
-        alt={photo.title}
-        loading="lazy"
-        className="w-full h-auto object-cover block"
-        style={
-          status === "loaded"
-            ? { opacity: 1, transition: "opacity 0.4s ease" }
-            : { opacity: 0, position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }
-        }
-        onLoad={() => setStatus("loaded")}
-        onError={() => setStatus("error")}
-      />
+      {/* Actual image — only renders when in/near viewport */}
+      {shouldLoad && (
+        <img
+          src={thumbUrl}
+          alt={photo.title}
+          loading={priority ? "eager" : "lazy"}
+          fetchPriority={priority ? "high" : "auto"}
+          decoding="async"
+          className="w-full h-auto object-cover block"
+          style={
+            status === "loaded"
+              ? { opacity: 1, transition: "opacity 0.35s ease" }
+              : { opacity: 0, position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }
+          }
+          onLoad={() => setStatus("loaded")}
+          onError={() => setStatus("error")}
+        />
+      )}
 
       {/* Hover overlay */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-3 md:p-4">
@@ -90,6 +144,47 @@ const PhotoTile = ({ photo, onClick }: { photo: Photo; onClick: () => void }) =>
       {/* Corner accents */}
       <div className="absolute top-2 left-2 w-8 h-8 border-t-2 border-l-2 border-primary/70 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-sm" />
       <div className="absolute bottom-2 right-2 w-8 h-8 border-b-2 border-r-2 border-primary/70 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-sm" />
+    </div>
+  );
+};
+
+// ── Lightbox image with full-res load ─────────────────────────────────────────
+const LightboxImage = ({ photo }: { photo: Photo }) => {
+  const [loaded, setLoaded] = useState(false);
+  const thumbUrl = getOptimizedUrl(photo.storage_url, 600);
+
+  return (
+    <div className="relative w-full max-h-[65vh] bg-black flex items-center justify-center overflow-hidden">
+      {/* Blurred thumb shown instantly while full-res loads */}
+      {!loaded && (
+        <img
+          src={thumbUrl}
+          alt=""
+          aria-hidden
+          className="absolute inset-0 w-full max-h-[65vh] object-contain"
+          style={{ filter: "blur(12px)", transform: "scale(1.05)", opacity: 0.6 }}
+        />
+      )}
+      <img
+        src={photo.storage_url}
+        alt={photo.title}
+        fetchPriority="high"
+        decoding="async"
+        className="w-full max-h-[65vh] object-contain relative z-10"
+        style={{ opacity: loaded ? 1 : 0, transition: "opacity 0.3s ease" }}
+        onLoad={() => setLoaded(true)}
+        onError={(e) => {
+          const el = e.currentTarget;
+          el.style.display = "none";
+          const parent = el.parentElement;
+          if (parent && !parent.querySelector(".img-error-msg")) {
+            const div = document.createElement("div");
+            div.className = "img-error-msg w-full flex items-center justify-center bg-zinc-900 text-zinc-500 text-sm py-20";
+            div.textContent = "Image unavailable";
+            parent.insertBefore(div, el);
+          }
+        }}
+      />
     </div>
   );
 };
@@ -131,7 +226,7 @@ const Gallery = () => {
       setFetchError(false);
       const { data, error } = await supabase
         .from("photos")
-        .select("*")
+        .select("id, title, category, storage_url, created_at") // explicit columns — faster
         .order("created_at", { ascending: false });
       if (error) throw error;
       setPhotos(data || []);
@@ -159,6 +254,19 @@ const Gallery = () => {
     [selectedIndex, filtered]
   );
 
+  // Preload adjacent lightbox images
+  useEffect(() => {
+    if (!selectedPhoto || filtered.length === 0) return;
+    const preloadIdx = [
+      (selectedIndex + 1) % filtered.length,
+      (selectedIndex - 1 + filtered.length) % filtered.length,
+    ];
+    preloadIdx.forEach((i) => {
+      const img = new Image();
+      img.src = filtered[i].storage_url;
+    });
+  }, [selectedIndex, selectedPhoto, filtered]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!selectedPhoto) return;
@@ -171,6 +279,9 @@ const Gallery = () => {
   }, [selectedPhoto, navigate]);
 
   const columns = distribute(filtered, cols);
+
+  // First 6 photos get priority loading (above the fold on mobile)
+  const priorityIds = new Set(filtered.slice(0, 6).map((p) => p.id));
 
   return (
     <section id="gallery" className="py-16 md:py-24 bg-background min-h-screen">
@@ -270,10 +381,15 @@ const Gallery = () => {
                     transition={{
                       duration: 0.38,
                       ease: [0.22, 1, 0.36, 1],
-                      delay: ci * 0.05 + pi * 0.07,
+                      // Only stagger first 8 — rest appear instantly
+                      delay: pi < 4 ? ci * 0.04 + pi * 0.05 : 0,
                     }}
                   >
-                    <PhotoTile photo={photo} onClick={() => openPhoto(photo)} />
+                    <PhotoTile
+                      photo={photo}
+                      onClick={() => openPhoto(photo)}
+                      priority={priorityIds.has(photo.id)}
+                    />
                   </motion.div>
                 ))}
               </div>
@@ -318,25 +434,10 @@ const Gallery = () => {
                 initial={{ opacity: 0, scale: 0.97 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.97 }}
-                transition={{ duration: 0.22, ease: "easeOut" }}
+                transition={{ duration: 0.18, ease: "easeOut" }}
                 className="overflow-y-auto max-h-[95vh]"
               >
-                <img
-                  src={selectedPhoto.storage_url}
-                  alt={selectedPhoto.title}
-                  className="w-full max-h-[65vh] object-contain bg-black"
-                  onError={(e) => {
-                    const el = e.currentTarget;
-                    el.style.display = "none";
-                    const parent = el.parentElement;
-                    if (parent && !parent.querySelector(".img-error-msg")) {
-                      const div = document.createElement("div");
-                      div.className = "img-error-msg w-full flex items-center justify-center bg-zinc-900 text-zinc-500 text-sm py-20";
-                      div.textContent = "Image unavailable";
-                      parent.insertBefore(div, el);
-                    }
-                  }}
-                />
+                <LightboxImage photo={selectedPhoto} />
                 <div className="p-5 md:p-6 space-y-4">
                   <div>
                     <span className="inline-block px-2 py-0.5 bg-primary/20 text-primary text-xs font-orbitron font-bold rounded-full mb-2 capitalize">
