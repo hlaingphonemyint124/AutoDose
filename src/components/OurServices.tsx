@@ -377,24 +377,28 @@ export default function OurServices() {
           <OrbitRing radius={orbitR} delay={0} />
           <OrbitRing radius={orbitR * 1.12} delay={2} />
 
-{/* Center hub — logo with screen blend to remove black bg */}
+{/* Center hub — circular, no black bg */}
 <div style={{
   position: "absolute", top: "50%", left: "50%",
   transform: "translate(-50%,-50%)",
-  width: orbitR * 0.72, height: orbitR * 0.72,
+  width: orbitR * 0.68, height: orbitR * 0.68,
+  borderRadius: "50%",
   zIndex: 20,
   animation: "adHubPulse 3.5s ease-in-out infinite",
+  overflow: "hidden",
   display: "flex", alignItems: "center", justifyContent: "center",
+  background: "transparent",
 }}>
   <img
     src={AUTO_DOSE_LOGO}
     alt="AutoDose"
     style={{
-      width: "100%",
-      height: "100%",
-      objectFit: "contain",
+      width: "130%",
+      height: "130%",
+      objectFit: "cover",
+      objectPosition: "center",
       mixBlendMode: "screen",
-      filter: "drop-shadow(0 0 20px rgba(220,38,38,0.9)) drop-shadow(0 0 8px rgba(220,38,38,0.5)) brightness(1.1)",
+      filter: "drop-shadow(0 0 20px rgba(220,38,38,0.9)) brightness(1.15)",
     }}
     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
   />
