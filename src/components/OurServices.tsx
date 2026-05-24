@@ -376,29 +376,34 @@ export default function OurServices() {
           onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
           <OrbitRing radius={orbitR} delay={0} />
           <OrbitRing radius={orbitR * 1.12} delay={2} />
-
-          {/* Center hub — outer animates, inner clips */}
-          <div style={{
-            position: "absolute", top: "50%", left: "50%",
-            transform: "translate(-50%,-50%)",
-            width: orbitR * 0.65, height: orbitR * 0.65,
-            borderRadius: "50%", zIndex: 20,
-            animation: "adHubPulse 3.5s ease-in-out infinite",
-            border: "2px solid rgba(220,38,38,0.65)",
-          }}>
-            <div style={{
-              position: "absolute", inset: 0, borderRadius: "50%", overflow: "hidden",
-              background: "#000", display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <img
-                src={AUTO_DOSE_LOGO}
-                alt="AutoDose"
-                style={{ width: "100%", height: "100%", objectFit: "contain", padding: "12%",
-                  filter: "drop-shadow(0 0 16px rgba(220,38,38,0.8)) brightness(1.15)" }}
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-              />
-            </div>
-          </div>
+          
+{/* Center hub — clean logo, no background */}
+<div style={{
+  position: "absolute", top: "50%", left: "50%",
+  transform: "translate(-50%,-50%)",
+  width: orbitR * 0.72, height: orbitR * 0.72,
+  borderRadius: "50%", zIndex: 20,
+  animation: "adHubPulse 3.5s ease-in-out infinite",
+}}>
+  <div style={{
+    position: "absolute", inset: 0, borderRadius: "50%", overflow: "hidden",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    background: "transparent",
+  }}>
+    <img
+      src={AUTO_DOSE_LOGO}
+      alt="AutoDose"
+      style={{
+        width: "100%",
+        height: "100%",
+        objectFit: "contain",
+        padding: "8%",
+        filter: "drop-shadow(0 0 20px rgba(220,38,38,0.9)) drop-shadow(0 0 8px rgba(220,38,38,0.5)) brightness(1.1)",
+      }}
+      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+    />
+  </div>
+</div>
 
           {/* Cards */}
           {SERVICES.map((service, i) => {
