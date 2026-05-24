@@ -147,8 +147,6 @@ const PhotoHero = () => {
           exit={{ opacity: 0 }}
           transition={{ duration: 1.4, ease: "easeOut" }}
           className="absolute inset-0 w-full h-full object-cover"
-          loading="eager"
-        fetchPriority="high"
         />
       </AnimatePresence>
 
