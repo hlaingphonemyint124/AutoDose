@@ -376,7 +376,7 @@ export default function OurServices() {
           onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
           <OrbitRing radius={orbitR} delay={0} />
           <OrbitRing radius={orbitR * 1.12} delay={2} />
-          
+
 {/* Center hub — clean logo, no background */}
 <div style={{
   position: "absolute", top: "50%", left: "50%",
@@ -399,8 +399,10 @@ export default function OurServices() {
         objectFit: "contain",
         padding: "8%",
         filter: "drop-shadow(0 0 20px rgba(220,38,38,0.9)) drop-shadow(0 0 8px rgba(220,38,38,0.5)) brightness(1.1)",
+        mixBlendMode: "screen" as const,
       }}
       onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+      
     />
   </div>
 </div>
