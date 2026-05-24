@@ -24,34 +24,50 @@ function distribute<T>(items: T[], cols: number): T[][] {
 
 // ── Photo tile ────────────────────────────────────────────────────────────────
 const PhotoTile = ({ photo, onClick }: { photo: Photo; onClick: () => void }) => {
-  const [loaded, setLoaded] = useState(false);
+  const [status, setStatus] = useState<"loading" | "loaded" | "error">("loading");
 
   return (
     <div
       className="relative group cursor-pointer overflow-hidden rounded-xl bg-muted mb-3 md:mb-4"
       onClick={onClick}
     >
-      {/* Aspect-ratio shimmer shown until image loads */}
-      {!loaded && (
-        <div
-          className="shimmer w-full rounded-xl"
-          style={{ paddingTop: "66.67%" }}
-        />
+      {/* Shimmer placeholder while loading */}
+      {status === "loading" && (
+        <div className="shimmer w-full rounded-xl" style={{ paddingTop: "66.67%" }} />
       )}
 
-      {/* Image: absolutely positioned (invisible) until loaded, then static + visible */}
+      {/* Broken image fallback */}
+      {status === "error" && (
+        <div
+          className="w-full flex flex-col items-center justify-center bg-zinc-900 border border-zinc-800 rounded-xl"
+          style={{ paddingTop: "66.67%", position: "relative" }}
+        >
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-zinc-600">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="M21 15l-5-5L5 21" />
+            </svg>
+            <span className="text-zinc-600 text-[10px] uppercase tracking-widest font-orbitron px-4 text-center line-clamp-2">
+              {photo.title}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Actual image */}
       <img
         src={photo.storage_url}
         alt={photo.title}
         loading="lazy"
         className="w-full h-auto object-cover block"
         style={
-          loaded
+          status === "loaded"
             ? { opacity: 1, transition: "opacity 0.4s ease" }
             : { opacity: 0, position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }
         }
-        onLoad={() => setLoaded(true)}
-        onError={() => setLoaded(true)}
+        onLoad={() => setStatus("loaded")}
+        onError={() => setStatus("error")}
       />
 
       {/* Hover overlay */}
@@ -309,6 +325,17 @@ const Gallery = () => {
                   src={selectedPhoto.storage_url}
                   alt={selectedPhoto.title}
                   className="w-full max-h-[65vh] object-contain bg-black"
+                  onError={(e) => {
+                    const el = e.currentTarget;
+                    el.style.display = "none";
+                    const parent = el.parentElement;
+                    if (parent && !parent.querySelector(".img-error-msg")) {
+                      const div = document.createElement("div");
+                      div.className = "img-error-msg w-full flex items-center justify-center bg-zinc-900 text-zinc-500 text-sm py-20";
+                      div.textContent = "Image unavailable";
+                      parent.insertBefore(div, el);
+                    }
+                  }}
                 />
                 <div className="p-5 md:p-6 space-y-4">
                   <div>
