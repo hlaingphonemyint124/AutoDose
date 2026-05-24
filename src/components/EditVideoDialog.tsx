@@ -160,14 +160,21 @@ export const EditVideoDialog = ({ video, open, onOpenChange, onSuccess }: EditVi
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="edit-video-thumbnail">Thumbnail URL</Label>
+            <Label htmlFor="edit-video-thumbnail">
+              Thumbnail URL{getVideoSourceType(youtubeUrl) === "facebook" ? " *" : ""}
+            </Label>
             <Input
               id="edit-video-thumbnail"
-              placeholder="Recommended for Facebook, optional for YouTube"
+              placeholder={getVideoSourceType(youtubeUrl) === "facebook" ? "Required for Facebook — paste a direct image URL" : "Recommended for Facebook, optional for YouTube"}
               value={thumbnailUrl}
               onChange={(e) => setThumbnailUrl(e.target.value)}
-              className="bg-background border-border"
+              className={`bg-background border-border ${getVideoSourceType(youtubeUrl) === "facebook" && !thumbnailUrl ? "border-amber-500/60" : ""}`}
             />
+            {getVideoSourceType(youtubeUrl) === "facebook" && !thumbnailUrl && (
+              <p className="text-xs text-amber-400 flex items-center gap-1.5">
+                ⚠️ Add a thumbnail URL so this Facebook video shows a preview image. Upload your image to Supabase storage or Imgur and paste the direct URL here.
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="edit-video-hls">HLS Stream URL (optional)</Label>

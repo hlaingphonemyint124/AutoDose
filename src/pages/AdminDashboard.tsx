@@ -738,15 +738,29 @@ const AdminDashboard = () => {
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="video-thumbnail-url">Thumbnail URL (Optional)</Label>
+                            <Label htmlFor="video-thumbnail-url">
+                              Thumbnail URL{videoSourceType === "facebook" ? " *" : " (Optional)"}
+                            </Label>
                             <Input
                               id="video-thumbnail-url"
                               type="url"
                               value={videoThumbnailUrl}
                               onChange={(e) => setVideoThumbnailUrl(e.target.value)}
-                              placeholder="Recommended for Facebook, optional for YouTube"
-                              className="bg-background border-border"
+                              placeholder={videoSourceType === "facebook" ? "Required for Facebook — paste a direct image URL" : "Recommended for Facebook, optional for YouTube"}
+                              className={`bg-background border-border ${videoSourceType === "facebook" && !videoThumbnailUrl ? "border-amber-500/60 focus-visible:ring-amber-500/50" : ""}`}
                             />
+                            {videoSourceType === "facebook" && !videoThumbnailUrl && (
+                              <p className="text-xs text-amber-400 flex items-center gap-1.5">
+                                <span>⚠️</span>
+                                Facebook videos require a thumbnail URL — without it, no preview image will show in the gallery or hero. Upload your thumbnail image somewhere (e.g. Imgur, your Supabase storage) and paste the direct URL here.
+                              </p>
+                            )}
+                            {videoSourceType === "facebook" && videoThumbnailUrl && (
+                              <p className="text-xs text-green-400 flex items-center gap-1.5">
+                                <span>✓</span>
+                                Thumbnail set — Facebook video will display correctly.
+                              </p>
+                            )}
                           </div>
                           <Button
                             type="submit"

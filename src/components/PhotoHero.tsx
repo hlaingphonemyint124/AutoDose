@@ -131,12 +131,14 @@ const PhotoHero = () => {
         )}
       </AnimatePresence>
 
-      {/* Current photo â€” Ken Burns slow zoom */}
+      {/* Current photo — Ken Burns slow zoom */}
       <AnimatePresence>
         <motion.img
           key={`photo-${current.id}`}
           src={current.storage_url}
           alt={current.title}
+          loading="eager"
+          fetchPriority="high"
           initial={{ opacity: 0, scale: 1.10 }}
           animate={{
             opacity: 1,
@@ -145,7 +147,8 @@ const PhotoHero = () => {
           exit={{ opacity: 0 }}
           transition={{ duration: 1.4, ease: "easeOut" }}
           className="absolute inset-0 w-full h-full object-cover"
-          loading="lazy"
+          loading="eager"
+        fetchPriority="high"
         />
       </AnimatePresence>
 
@@ -174,7 +177,7 @@ const PhotoHero = () => {
             >
               <Camera size={13} />
               Featured Photography
-              {current.category && <span className="text-white/50">Â· {current.category}</span>}
+              {current.category && <span className="text-white/50">· {current.category}</span>}
             </motion.span>
 
             <h2 className="text-3xl sm:text-5xl md:text-6xl font-orbitron font-bold text-white leading-tight drop-shadow-lg">
@@ -182,7 +185,7 @@ const PhotoHero = () => {
             </h2>
 
             <p className="text-sm sm:text-base md:text-lg text-white/75 max-w-xl drop-shadow">
-              Step into the AUTODOSE gallery â€” a curated collection of JDM photography capturing
+              Step into the AUTODOSE gallery — a curated collection of JDM photography capturing
               speed, style and Japanese automotive soul.
             </p>
 

@@ -273,7 +273,8 @@ function HeroCard({ video, slotName, slots, isCenter, isSmall, onPlayClick }: Ca
           src={poster}
           alt={video.title}
           onError={imgFallback(video)}
-          loading="lazy"
+          loading={isCenter ? "eager" : "lazy"}
+          fetchPriority={isCenter ? "high" : "auto"}
           decoding="async"
           className="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-700 scale-[1.03] group-hover:scale-[1.09]"
         />

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Heart, Eye, ArrowRight } from "lucide-react";
+import { Eye, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,7 +10,6 @@ interface Photo {
   title: string;
   storage_url: string;
   category: string | null;
-  likes: number | null;
 }
 
 const LatestPhotosSection = () => {
@@ -21,7 +20,7 @@ const LatestPhotosSection = () => {
     const fetchFeaturedPhotos = async () => {
       const { data } = await supabase
         .from("photos")
-        .select("id, title, storage_url, category, likes")
+        .select("id, title, storage_url, category")
         .eq("is_homepage_featured", true)
         .order("created_at", { ascending: false })
         .limit(6);
@@ -85,10 +84,6 @@ const LatestPhotosSection = () => {
                     {photo.category && (
                       <span className="text-primary text-xs font-inter uppercase tracking-wider">{photo.category}</span>
                     )}
-                    <div className="flex items-center gap-1 text-muted-foreground text-xs">
-                      <Heart size={12} />
-                      <span>{photo.likes || 0}</span>
-                    </div>
                   </div>
                 </div>
                 {/* Hover icon */}

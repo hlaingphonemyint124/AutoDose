@@ -1,4 +1,5 @@
 import { Helmet } from "react-helmet-async";
+import ogDefault from "@/assets/og-default.jpg";
 
 interface SEOProps {
   title: string;
@@ -11,7 +12,7 @@ interface SEOProps {
 }
 
 const SITE_NAME = "AUTODOSE";
-const DEFAULT_IMAGE = "/og-default.jpg";
+const DEFAULT_IMAGE = ogDefault;
 
 const SEO = ({
   title,

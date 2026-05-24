@@ -1,17 +1,16 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import SEO from "@/components/SEO";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { motion } from "framer-motion";
-import { Play, Filter, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { motion, AnimatePresence } from "framer-motion";
+import { Play, Filter, X, Clock, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Comments } from "@/components/Comments";
 import { useWatchProgress } from "@/hooks/useWatchProgress";
 import ProVideoPlayer, { Chapter, PlayerVideo } from "@/components/ProVideoPlayer";
 import UpNextOverlay from "@/components/UpNextOverlay";
-import { getYouTubeFallbackThumbnail, getYouTubeThumbnail } from "@/lib/youtube";
+import { getYouTubeFallbackThumbnail, getYouTubeThumbnail, isFacebookVideoUrl } from "@/lib/youtube";
 
 interface Video {
   id: string;
@@ -26,7 +25,105 @@ interface Video {
   duration: string | null;
   likes: number;
   chapters: Chapter[] | null;
+  created_at?: string;
 }
+
+const CATEGORIES = ["all", "photoshoots", "vlogs", "reviews", "tutorials"];
+
+/* Card component memoised to avoid re-renders */
+const VideoCard = ({
+  video, index, onClick,
+}: { video: Video; index: number; onClick: () => void }) => {
+  const thumb = video.thumbnail_url
+    || getYouTubeThumbnail(video.youtube_video_id || video.youtube_url || video.storage_url);
+  const isFB = video.source_type === "facebook" || isFacebookVideoUrl(video.storage_url);
+  const [imgLoaded, setImgLoaded] = useState(false);
+
+  return (
+    <motion.article
+      layout
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ duration: 0.35, delay: Math.min(index * 0.04, 0.3), ease: [0.22,1,0.36,1] }}
+      className="group relative bg-card border border-border rounded-2xl overflow-hidden hover:border-primary/50 transition-all duration-300 hover:shadow-[0_8px_32px_hsla(var(--primary)/0.15)] cursor-pointer contain-paint"
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && onClick()}
+      aria-label={`Play ${video.title}`}
+    >
+      {/* Thumbnail */}
+      <div className="relative aspect-video overflow-hidden bg-muted">
+        {thumb ? (
+          <>
+            {!imgLoaded && <div className="absolute inset-0 shimmer" />}
+            <img
+              src={thumb}
+              alt={video.title}
+              loading="lazy"
+              onLoad={() => setImgLoaded(true)}
+              onError={(e) => {
+                const fb = getYouTubeFallbackThumbnail(video.youtube_video_id || video.youtube_url || video.storage_url);
+                if (fb && (e.currentTarget as HTMLImageElement).src !== fb)
+                  (e.currentTarget as HTMLImageElement).src = fb;
+              }}
+              className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105 ${imgLoaded ? "opacity-100" : "opacity-0"}`}
+            />
+          </>
+        ) : isFB ? (
+          <div className="w-full h-full bg-gradient-to-br from-[#0d1b2e] to-[#1a1a2e] flex flex-col items-center justify-center gap-2">
+            <svg viewBox="0 0 24 24" fill="#1877F2" className="w-10 h-10 opacity-60">
+              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+            </svg>
+            <p className="text-white/40 text-[10px] uppercase tracking-widest">Facebook</p>
+          </div>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Play className="text-primary/40" size={40} />
+          </div>
+        )}
+
+        {/* Hover overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+          <div className="w-14 h-14 rounded-full bg-primary flex items-center justify-center shadow-[0_0_24px_hsla(var(--primary)/0.7)] scale-75 group-hover:scale-100 transition-transform duration-300">
+            <Play className="text-white ml-1" size={22} fill="white" />
+          </div>
+        </div>
+
+        {/* Badges */}
+        <div className="absolute bottom-2 right-2 flex items-center gap-1.5">
+          {video.duration && (
+            <span className="bg-black/80 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-md flex items-center gap-1">
+              <Clock size={9} /> {video.duration}
+            </span>
+          )}
+        </div>
+        {isFB && (
+          <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#1877F2]/90 text-white text-[10px] font-semibold">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5">
+              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+            </svg>
+            Facebook
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="p-4 md:p-5">
+        <span className="inline-block text-[10px] uppercase tracking-wider text-primary/80 font-orbitron font-bold mb-1.5 capitalize">
+          {video.category}
+        </span>
+        <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors duration-200 line-clamp-2 leading-snug text-sm md:text-base">
+          {video.title}
+        </h3>
+      </div>
+
+      {/* Bottom shimmer line on hover */}
+      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left rounded-full" />
+    </motion.article>
+  );
+};
 
 const Videos = () => {
   const [activeFilter, setActiveFilter] = useState("all");
@@ -37,252 +134,210 @@ const Videos = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   useWatchProgress(videoRef, selectedVideo?.id);
 
-  const categories = ["all", "photoshoots", "vlogs", "reviews", "tutorials"];
-
   useEffect(() => {
-    fetchVideos();
+    supabase
+      .from("videos")
+      .select("id,title,category,storage_url,hls_url,thumbnail_url,duration,description,chapters,created_at,source_type,youtube_url,youtube_video_id,likes")
+      .order("created_at", { ascending: false })
+      .then(({ data, error }) => {
+        if (error) console.error("Videos fetch:", error.message);
+        setVideos((data || []) as unknown as Video[]);
+        setLoading(false);
+      })
+      .catch((e) => { console.error("Videos catch:", e); setLoading(false); });
   }, []);
 
-  const fetchVideos = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("videos")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setVideos((data || []) as unknown as Video[]);
-    } catch (error) {
-      console.error("Error fetching videos:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filteredVideos =
-    activeFilter === "all"
-      ? videos
-      : videos.filter((video) => video.category === activeFilter);
+  const filteredVideos = useMemo(() =>
+    activeFilter === "all" ? videos : videos.filter((v) => v.category === activeFilter),
+    [activeFilter, videos]
+  );
 
   const upNext = useMemo<Video | null>(() => {
     if (!selectedVideo) return null;
     const same = videos.filter((v) => v.category === selectedVideo.category);
     const idx = same.findIndex((v) => v.id === selectedVideo.id);
-    if (idx === -1) return null;
     return same[idx + 1] ?? null;
   }, [selectedVideo, videos]);
 
-  const playUpNext = () => {
+  const playUpNext = useCallback(() => {
     if (!upNext) return;
     setShowUpNext(false);
     setSelectedVideo(upNext);
-  };
+  }, [upNext]);
 
-  const playerVideo: PlayerVideo | null = selectedVideo
-    ? {
-        id: selectedVideo.id,
-        title: selectedVideo.title,
-        storage_url: selectedVideo.storage_url,
-        hls_url: selectedVideo.hls_url,
-        youtube_url: selectedVideo.youtube_url,
-        youtube_video_id: selectedVideo.youtube_video_id,
-        source_type: selectedVideo.source_type,
-        thumbnail_url: selectedVideo.thumbnail_url,
-        chapters: selectedVideo.chapters ?? [],
-      }
-    : null;
+  const handleClose = useCallback(() => {
+    setSelectedVideo(null);
+    setShowUpNext(false);
+  }, []);
 
-  const videoJsonLd = filteredVideos.slice(0, 20).map((v) => ({
-    "@context": "https://schema.org",
-    "@type": "VideoObject",
-    name: v.title,
-    description: `${v.title} — ${v.category} | AUTODOSE`,
-    thumbnailUrl: (v.thumbnail_url || getYouTubeThumbnail(v.youtube_video_id || v.youtube_url || v.storage_url))
-      ? [v.thumbnail_url || getYouTubeThumbnail(v.youtube_video_id || v.youtube_url || v.storage_url)]
-      : undefined,
-    contentUrl: v.youtube_url || v.storage_url,
-    uploadDate: new Date().toISOString(),
-    duration: v.duration ?? undefined,
-  }));
+  const playerVideo: PlayerVideo | null = selectedVideo ? {
+    id: selectedVideo.id,
+    title: selectedVideo.title,
+    storage_url: selectedVideo.storage_url,
+    hls_url: selectedVideo.hls_url,
+    youtube_url: selectedVideo.youtube_url,
+    youtube_video_id: selectedVideo.youtube_video_id,
+    source_type: selectedVideo.source_type,
+    thumbnail_url: selectedVideo.thumbnail_url,
+    chapters: selectedVideo.chapters ?? [],
+  } : null;
 
   return (
     <div className="min-h-screen bg-background font-inter">
       <SEO
-        title="Video Gallery — JDM Vlogs, Reviews & Tutorials"
+        title="Videos — JDM Vlogs, Reviews & Cinematic Content"
         description="Watch the latest AUTODOSE JDM videos: photoshoots, vlogs, car reviews, and photography tutorials."
         type="video.other"
-        image={selectedVideo?.thumbnail_url ?? undefined}
-        jsonLd={videoJsonLd}
       />
       <Navbar />
 
-      <div className="pt-32 pb-20 px-4">
+      <div className="pt-28 md:pt-36 pb-20 px-4">
         <div className="container mx-auto max-w-7xl">
+
+          {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-12"
+            transition={{ duration: 0.5, ease: [0.22,1,0.36,1] }}
+            className="text-center mb-10 md:mb-14"
           >
-            <h1 className="text-5xl md:text-6xl font-orbitron font-bold text-foreground mb-4">
+            <span className="inline-block text-xs uppercase tracking-[0.3em] text-primary font-orbitron mb-3 px-3 py-1 border border-primary/30 rounded-full bg-primary/5">
+              Watch Now
+            </span>
+            <h1 className="text-4xl sm:text-6xl md:text-7xl font-orbitron font-bold text-foreground mb-4">
               Video <span className="text-primary">Gallery</span>
             </h1>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Watch our latest JDM content, vlogs, and photography tutorials
+            <p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
+              Cinematic automotive content — JDM meets, builds, and street sessions.
             </p>
           </motion.div>
 
+          {/* Filter bar */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="flex flex-wrap justify-center gap-3 mb-12"
+            transition={{ duration: 0.4, delay: 0.1 }}
+            className="flex flex-wrap items-center justify-center gap-2 mb-8 md:mb-12"
           >
-            <Filter className="text-primary self-center" size={20} />
-            {categories.map((category) => (
-              <Button
-                key={category}
-                onClick={() => setActiveFilter(category)}
-                variant={activeFilter === category ? "default" : "outline"}
-                className={
-                  activeFilter === category
-                    ? "bg-primary hover:bg-primary/90 text-primary-foreground"
-                    : "border-border hover:bg-card"
-                }
+            <Filter className="text-primary/50" size={16} />
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setActiveFilter(cat)}
+                className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-all duration-200 press-effect capitalize ${
+                  activeFilter === cat
+                    ? "bg-primary text-primary-foreground border-primary shadow-[0_0_14px_hsla(var(--primary)/0.4)]"
+                    : "bg-transparent text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
+                }`}
               >
-                {category.charAt(0).toUpperCase() + category.slice(1)}
-              </Button>
+                {cat === "all" ? "All Videos" : cat}
+              </button>
             ))}
           </motion.div>
 
-          {loading ? (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">Loading videos...</p>
-            </div>
-          ) : filteredVideos.length === 0 ? (
-            <div className="text-center py-20">
-              <p className="text-muted-foreground text-lg">
-                No videos found in this category.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredVideos.map((video, index) => {
-                const thumb = video.thumbnail_url || getYouTubeThumbnail(video.youtube_video_id || video.youtube_url || video.storage_url);
-                return (
-                <motion.div
-                  key={video.id}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.4, delay: index * 0.1 }}
-                  className="group relative bg-card border border-border rounded-lg overflow-hidden hover:shadow-glow transition-all duration-300"
-                >
-                  <div
-                    className="relative aspect-video overflow-hidden cursor-pointer"
-                    onClick={() => {
-                      setShowUpNext(false);
-                      setSelectedVideo(video);
-                    }}
-                  >
-                    {thumb ? (
-                      <img
-                        src={thumb}
-                        alt={video.title}
-                        onError={(event) => {
-                          const fallback = getYouTubeFallbackThumbnail(video.youtube_video_id || video.youtube_url || video.storage_url);
-                          if (fallback && event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
-                        }}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-muted flex items-center justify-center">
-                        <Play className="text-primary" size={48} />
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-black/40 group-hover:bg-black/60 transition-colors flex items-center justify-center">
-                      <div className="w-16 h-16 rounded-full bg-primary/80 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <Play className="text-white ml-1" size={28} fill="white" />
-                      </div>
-                    </div>
-                    {video.duration && (
-                      <div className="absolute bottom-2 right-2 bg-black/80 px-2 py-1 rounded text-xs text-white">
-                        {video.duration}
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-2">
-                      {video.title}
-                    </h3>
-                    <p className="text-sm text-muted-foreground capitalize mt-2">
-                      {video.category}
-                    </p>
-                  </div>
-                </motion.div>
-                );
-              })}
-            </div>
-          )}
+          {/* Count */}
+          <AnimatePresence mode="wait">
+            <motion.p
+              key={filteredVideos.length + activeFilter}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-xs text-muted-foreground text-center mb-6"
+            >
+              {loading ? "Loading…" : `${filteredVideos.length} video${filteredVideos.length !== 1 ? "s" : ""}`}
+            </motion.p>
+          </AnimatePresence>
 
-          <Dialog
-            open={!!selectedVideo}
-            onOpenChange={(open) => {
-              if (!open) {
-                setSelectedVideo(null);
-                setShowUpNext(false);
-              }
-            }}
-          >
-            <DialogContent className="max-w-7xl p-0 bg-background max-h-[95vh] overflow-y-auto">
-              <DialogTitle className="sr-only">Video Player</DialogTitle>
-              <DialogDescription className="sr-only">
-                Watch {selectedVideo?.title}
-              </DialogDescription>
-              <button
-                onClick={() => {
-                  setSelectedVideo(null);
-                  setShowUpNext(false);
-                }}
-                className="absolute top-4 right-4 z-50 w-10 h-10 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center text-foreground hover:text-primary transition-colors"
-              >
-                <X size={20} />
-              </button>
-              {playerVideo && (
-                <div className="p-4 md:p-6 space-y-6">
-                  <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-                    <ProVideoPlayer
-                      video={playerVideo}
-                      videoRef={videoRef}
-                      onEnded={() => upNext && setShowUpNext(true)}
-                      upNextLabel={upNext?.title}
-                      onUpNextClick={playUpNext}
-                    />
-                    {showUpNext && upNext && (
-                      <UpNextOverlay
-                        nextTitle={upNext.title}
-                        nextThumb={upNext.thumbnail_url}
-                        onPlayNow={playUpNext}
-                        onCancel={() => setShowUpNext(false)}
-                      />
-                    )}
-                  </div>
-                  <div className="space-y-4">
-                    <div>
-                      <h2 className="text-2xl font-bold text-foreground">
-                        {selectedVideo?.title}
-                      </h2>
-                      <p className="text-muted-foreground capitalize">
-                        {selectedVideo?.category}
-                      </p>
-                    </div>
-                    <Comments videoId={selectedVideo!.id} />
+          {/* Grid */}
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <div key={i} className="rounded-2xl overflow-hidden bg-card border border-border">
+                  <div className="aspect-video shimmer" />
+                  <div className="p-4 space-y-2">
+                    <div className="h-3 w-16 shimmer rounded" />
+                    <div className="h-4 w-full shimmer rounded" />
+                    <div className="h-4 w-3/4 shimmer rounded" />
                   </div>
                 </div>
-              )}
-            </DialogContent>
-          </Dialog>
+              ))}
+            </div>
+          ) : filteredVideos.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-center py-24 text-muted-foreground"
+            >
+              <Play className="mx-auto mb-4 text-primary/30" size={48} />
+              <p className="text-lg font-medium">No videos in this category yet.</p>
+            </motion.div>
+          ) : (
+            <motion.div
+              layout
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6"
+            >
+              <AnimatePresence>
+                {filteredVideos.map((video, i) => (
+                  <VideoCard
+                    key={video.id}
+                    video={video}
+                    index={i}
+                    onClick={() => { setShowUpNext(false); setSelectedVideo(video); }}
+                  />
+                ))}
+              </AnimatePresence>
+            </motion.div>
+          )}
         </div>
       </div>
+
+      {/* Player Dialog */}
+      <Dialog open={!!selectedVideo} onOpenChange={(o) => !o && handleClose()}>
+        <DialogContent className="max-w-5xl p-0 bg-background border-border/50 max-h-[95vh] overflow-y-auto">
+          <DialogTitle className="sr-only">Video Player — {selectedVideo?.title}</DialogTitle>
+          <DialogDescription className="sr-only">Watch {selectedVideo?.title}</DialogDescription>
+          <button
+            onClick={handleClose}
+            className="absolute top-3 right-3 z-50 w-9 h-9 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center text-foreground hover:text-primary hover:bg-primary/10 border border-border transition-all press-effect"
+          >
+            <X size={18} />
+          </button>
+          {playerVideo && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.2 }}
+              className="p-4 md:p-6 space-y-5"
+            >
+              <div className="relative aspect-video bg-black rounded-xl overflow-hidden shadow-2xl">
+                <ProVideoPlayer
+                  video={playerVideo}
+                  videoRef={videoRef}
+                  onEnded={() => upNext && setShowUpNext(true)}
+                  upNextLabel={upNext?.title}
+                  onUpNextClick={playUpNext}
+                />
+                {showUpNext && upNext && (
+                  <UpNextOverlay
+                    nextTitle={upNext.title}
+                    nextThumb={upNext.thumbnail_url}
+                    onPlayNow={playUpNext}
+                    onCancel={() => setShowUpNext(false)}
+                  />
+                )}
+              </div>
+              <div className="space-y-1">
+                <span className="text-xs text-primary font-orbitron uppercase tracking-wider capitalize">
+                  {selectedVideo?.category}
+                </span>
+                <h2 className="text-xl md:text-2xl font-bold text-foreground leading-snug">
+                  {selectedVideo?.title}
+                </h2>
+              </div>
+              <Comments videoId={selectedVideo!.id} />
+            </motion.div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Footer />
     </div>

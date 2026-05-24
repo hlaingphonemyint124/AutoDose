@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, Play } from "lucide-react";
-import { getYouTubeFallbackThumbnail, getYouTubeThumbnail } from "@/lib/youtube";
+import { getYouTubeFallbackThumbnail, getYouTubeThumbnail, isFacebookVideoUrl } from "@/lib/youtube";
 
 export interface RowVideo {
   id: string;
@@ -107,6 +107,7 @@ const VideoRow = ({ title, videos, onSelect, variant = "compact" }: Props) => {
         >
           {videos.map((video, i) => {
             const thumb = video.thumbnail_url || getYouTubeThumbnail(video.youtube_video_id || video.youtube_url || video.storage_url);
+            const isFacebook = video.source_type === "facebook" || isFacebookVideoUrl(video.storage_url);
             return (
               <motion.div
                 key={video.id}
@@ -117,7 +118,7 @@ const VideoRow = ({ title, videos, onSelect, variant = "compact" }: Props) => {
                 whileHover={{ scale: 1.04, y: -7, zIndex: 5 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => onSelect(video)}
-                className={`${isFeatured ? "w-[82vw] rounded-lg border-primary/20 md:w-[520px] lg:w-[620px]" : "w-[280px] rounded-md border-border md:w-[340px]"} group/card relative aspect-video flex-shrink-0 snap-start cursor-pointer overflow-hidden border bg-card shadow-card card-glow-hover transform-gpu transition-colors duration-300`}
+                className={`${isFeatured ? "w-[72vw] rounded-lg border-primary/20 md:w-[360px] lg:w-[420px]" : "w-[260px] rounded-md border-border md:w-[300px]"} group/card relative aspect-video flex-shrink-0 snap-start cursor-pointer overflow-hidden border bg-card shadow-card card-glow-hover transform-gpu transition-colors duration-300`}
                 style={{ transformStyle: "preserve-3d" }}
               >
                 {thumb ? (
@@ -128,8 +129,20 @@ const VideoRow = ({ title, videos, onSelect, variant = "compact" }: Props) => {
                       const fb = getYouTubeFallbackThumbnail(video.youtube_video_id || video.youtube_url || video.storage_url);
                       if (fb && (e.target as HTMLImageElement).src !== fb) (e.target as HTMLImageElement).src = fb;
                     }}
+                    loading="lazy"
+                    decoding="async"
                     className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover/card:scale-108"
                   />
+                ) : isFacebook ? (
+                  /* Facebook video with no thumbnail — branded placeholder */
+                  <div className="w-full h-full bg-gradient-to-br from-[#0d1b2e] via-[#0f1f3d] to-[#1a1a2e] flex flex-col items-center justify-center gap-3">
+                    <div className="w-14 h-14 rounded-full bg-[#1877F2]/20 border border-[#1877F2]/40 flex items-center justify-center">
+                      <svg viewBox="0 0 24 24" fill="#1877F2" className="w-7 h-7">
+                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                      </svg>
+                    </div>
+                    <p className="text-[10px] text-white/40 font-medium tracking-widest uppercase">Facebook Video</p>
+                  </div>
                 ) : (
                   <div className="w-full h-full bg-muted flex items-center justify-center">
                     <Play className="text-primary" size={40} />
@@ -149,7 +162,7 @@ const VideoRow = ({ title, videos, onSelect, variant = "compact" }: Props) => {
                 <div className="absolute inset-0 flex items-center justify-center opacity-100 transition-all duration-300 md:opacity-0 md:group-hover/card:opacity-100">
                   <motion.div
                     whileHover={{ scale: 1.15 }}
-                    className={`${isFeatured ? "h-16 w-16 md:h-20 md:w-20" : "h-14 w-14"} grid place-items-center rounded-full border border-white/20 bg-primary shadow-glow transition-shadow duration-300 group-hover/card:shadow-intense`}
+                    className={`${isFeatured ? "h-14 w-14 md:h-16 md:w-16" : "h-14 w-14"} grid place-items-center rounded-full border border-white/20 bg-primary shadow-glow transition-shadow duration-300 group-hover/card:shadow-intense`}
                   >
                     <Play className="text-primary-foreground ml-0.5" size={isFeatured ? 30 : 22} fill="currentColor" />
                   </motion.div>
@@ -159,6 +172,16 @@ const VideoRow = ({ title, videos, onSelect, variant = "compact" }: Props) => {
                 {video.duration && (
                   <div className="duration-badge opacity-100 group-hover/card:opacity-0 transition-opacity duration-200">
                     {video.duration}
+                  </div>
+                )}
+
+                {/* Facebook badge */}
+                {isFacebook && (
+                  <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#1877F2]/90 backdrop-blur-sm text-white text-[10px] font-semibold tracking-wide shadow-lg">
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5">
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                    </svg>
+                    Facebook
                   </div>
                 )}
 

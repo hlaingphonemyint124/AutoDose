@@ -22,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { getVideoEmbedUrl, isEmbeddedVideo } from "@/lib/youtube";
+import { getVideoEmbedUrl, isEmbeddedVideo, isFacebookVideoUrl } from "@/lib/youtube";
 
 export interface Chapter {
   time: number; // seconds
@@ -86,11 +86,14 @@ const ProVideoPlayer = ({ video, videoRef, onEnded, upNextLabel, onUpNextClick }
   const [activeChapterIndex, setActiveChapterIndex] = useState<number | null>(null);
 
   const chapters: Chapter[] = Array.isArray(video.chapters) ? video.chapters : [];
+  const isFacebook =
+    video.source_type === "facebook" ||
+    isFacebookVideoUrl(video.storage_url);
   const embeddedUrl = getVideoEmbedUrl(video, {
     autoplay: true,
     controls: true,
   });
-  const useEmbed = isEmbeddedVideo(video) && !!embeddedUrl;
+  const useEmbed = isEmbeddedVideo(video) && !!embeddedUrl && !isFacebook;
 
   // ---------- Source loading (HLS or MP4) ----------
   useEffect(() => {
@@ -308,6 +311,60 @@ const ProVideoPlayer = ({ video, videoRef, onEnded, upNextLabel, onUpNextClick }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [togglePlay, toggleMute, toggleFullscreen, skip, bumpControls, videoRef]);
+
+  // Facebook videos cannot be embedded due to Facebook's content policy.
+  // Show a branded overlay with thumbnail and a direct link to watch on Facebook.
+  if (isFacebook) {
+    const fbUrl = video.storage_url || "";
+    const poster = video.thumbnail_url || undefined;
+    return (
+      <div
+        ref={containerRef}
+        className="relative w-full h-full bg-black flex flex-col items-center justify-center overflow-hidden"
+      >
+        {/* Background thumbnail blur */}
+        {poster && (
+          <div
+            className="absolute inset-0 bg-cover bg-center scale-110 blur-md opacity-30"
+            style={{ backgroundImage: `url(${poster})` }}
+          />
+        )}
+        <div className="relative z-10 flex flex-col items-center gap-5 px-6 text-center max-w-md">
+          {/* Thumbnail preview */}
+          {poster ? (
+            <div className="relative w-full max-w-xs aspect-video rounded-lg overflow-hidden border border-white/10 shadow-2xl">
+              <img src={poster} alt={video.title} className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+            </div>
+          ) : (
+            <div className="w-20 h-20 rounded-full bg-[#1877F2]/20 border border-[#1877F2]/40 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" fill="#1877F2" className="w-10 h-10">
+                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+              </svg>
+            </div>
+          )}
+          <div>
+            <p className="text-xs text-white/50 uppercase tracking-widest mb-1 font-orbitron">Facebook Video</p>
+            <h3 className="text-white font-semibold text-lg leading-snug line-clamp-2">{video.title}</h3>
+          </div>
+          <p className="text-white/60 text-sm">
+            This video is hosted on Facebook and must be watched there.
+          </p>
+          <a
+            href={fbUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2.5 px-6 py-3 rounded-full bg-[#1877F2] hover:bg-[#1460c8] text-white font-semibold text-sm transition-all duration-200 shadow-lg hover:shadow-[#1877F2]/40 hover:scale-105"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+            </svg>
+            Watch on Facebook
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   if (useEmbed) {
     return (

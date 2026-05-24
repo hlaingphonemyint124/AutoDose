@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, Camera, Heart } from "lucide-react";
+import { ChevronLeft, ChevronRight, Camera } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export interface RowPhoto {
@@ -93,10 +93,6 @@ const LatestPhotoRow = ({ title, photos }: Props) => {
                         {photo.category}
                       </span>
                     )}
-                    <span className="flex items-center gap-1 drop-shadow">
-                      <Heart size={12} />
-                      {photo.likes ?? 0}
-                    </span>
                   </div>
                 </div>
               </Link>
