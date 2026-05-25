@@ -47,7 +47,7 @@ const NeuralNoiseBg = memo(() => {
     const canvas = ref.current;
     if (!canvas) return;
     const gl = (canvas.getContext("webgl") ?? canvas.getContext("experimental-webgl")) as WebGLRenderingContext | null;
-    if (!gl) return; // Graceful fallback — CSS gradient bg shows instead
+    if (!gl) return;
 
     const mkShader = (src: string, type: number) => {
       const s = gl.createShader(type)!;
@@ -158,7 +158,11 @@ const CardBorder = ({ hovered }: { hovered: boolean }) => (
 );
 
 // ─── Service card ─────────────────────────────────────────────────────────────
-const ServiceCard = memo(({ service, x, y }: { service: ServiceItem; x: number; y: number }) => {
+// KEY CHANGE: removed x/y props, accepts cardRef for direct DOM positioning
+const ServiceCard = memo(({ service, cardRef }: {
+  service: ServiceItem;
+  cardRef: (el: HTMLDivElement | null) => void;
+}) => {
   const [hovered, setHovered] = useState(false);
   const navigate = useNavigate();
 
@@ -168,10 +172,17 @@ const ServiceCard = memo(({ service, x, y }: { service: ServiceItem; x: number; 
   }, [service, navigate]);
 
   return (
+    // This div's transform is now mutated directly by the rAF loop — zero React renders
     <div
+      ref={cardRef}
       className="absolute top-1/2 left-1/2 w-[172px]"
-      style={{ transform: `translate(calc(${x}px - 50%), calc(${y}px - 50%))`, zIndex: hovered ? 30 : 10, willChange: "transform" }}
-      // Keyboard accessibility
+      style={{
+        transform: "translate3d(-50%, -50%, 0)",
+        zIndex: hovered ? 30 : 10,
+        willChange: "transform",
+        backfaceVisibility: "hidden",
+        WebkitBackfaceVisibility: "hidden",
+      }}
       tabIndex={service.comingSoon ? -1 : 0}
       role="button"
       aria-label={`${service.titleWhite} ${service.titleRed} — ${service.description}`}
@@ -303,40 +314,66 @@ const EpicButton = () => {
   );
 };
 
-// ─── Protected admin route wrapper ───────────────────────────────────────────
-// (OurServices doesn't need it — kept here for reference; see App.tsx fix)
-
 // ─── Main section ─────────────────────────────────────────────────────────────
 export default function OurServices() {
-  const [time,   setTime]   = useState(0);
-  const [paused, setPaused] = useState(false);
-  const [orbitR, setOrbitR] = useState(BASE_R);
-  const lastTs  = useRef<number | null>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
+  // ✅ FIX: time & paused moved from useState → useRef
+  // This means the animation loop NEVER triggers a React re-render
+  const timeRef   = useRef(0);
+  const pausedRef = useRef(false);
+  const lastTsRef = useRef<number | null>(null);
 
+  // One ref slot per card — populated by the cardRef callback on each ServiceCard
+  const cardRefs  = useRef<(HTMLDivElement | null)[]>([]);
+
+  const stageRef  = useRef<HTMLDivElement>(null);
+  const [orbitR,  setOrbitR] = useState(BASE_R);
+
+  // Responsive orbit radius
   useEffect(() => {
-    const calc = () => { const vw = Math.min(window.innerWidth, 680); setOrbitR(Math.min(BASE_R, vw * 0.32)); };
+    const calc = () => {
+      const vw = Math.min(window.innerWidth, 680);
+      setOrbitR(Math.min(BASE_R, vw * 0.32));
+    };
     calc();
     window.addEventListener("resize", calc);
     return () => window.removeEventListener("resize", calc);
   }, []);
 
+  // ✅ FIX: Animation loop — pure DOM mutation, zero React renders per frame
+  // Skips React reconciler entirely → no virtual DOM diff → no jank
   useEffect(() => {
     let raf: number;
+
     const tick = (ts: number) => {
-      if (lastTs.current !== null && !paused) setTime((t) => t + (ts - lastTs.current!) / 1000);
-      lastTs.current = ts;
+      if (lastTsRef.current !== null && !pausedRef.current) {
+        timeRef.current += (ts - lastTsRef.current) / 1000;
+      }
+      lastTsRef.current = ts;
+
+      const t = timeRef.current;
+
+      cardRefs.current.forEach((el, i) => {
+        if (!el) return;
+        const angle = t * SPEED + PHASES[i];
+        const x = Math.cos(angle) * orbitR;
+        const y = Math.sin(angle) * orbitR;
+        // Direct style mutation — bypasses React, goes straight to browser compositor
+        el.style.transform = `translate3d(calc(${x}px - 50%), calc(${y}px - 50%), 0)`;
+      });
+
       raf = requestAnimationFrame(tick);
     };
+
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [paused]);
+  }, [orbitR]); // re-bind only when radius changes (responsive resize)
 
   const stageSz = orbitR * 2 + 320;
 
   return (
     <section className="relative w-full overflow-hidden text-white"
       style={{ background: "#060606", minHeight: "100vh" }}>
+
       {/* WebGL — CSS gradient fallback if WebGL unavailable */}
       <div aria-hidden className="absolute inset-0"
         style={{ background: "radial-gradient(ellipse 80% 70% at 50% 50%, rgba(80,10,10,0.55) 0%, #060606 70%)" }} />
@@ -371,45 +408,53 @@ export default function OurServices() {
         </motion.p>
 
         {/* Orbit stage */}
-        <div ref={stageRef} className="relative flex-shrink-0"
+        <div
+          ref={stageRef}
+          className="relative flex-shrink-0"
           style={{ width: stageSz, height: stageSz, maxWidth: "100%" }}
-          onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+          // ✅ FIX: pausedRef.current = true/false — no state, no re-render
+          onMouseEnter={() => { pausedRef.current = true; }}
+          onMouseLeave={() => { pausedRef.current = false; }}
+        >
           <OrbitRing radius={orbitR} delay={0} />
           <OrbitRing radius={orbitR * 1.12} delay={2} />
 
-{/* Center hub — circular, no black bg */}
-<div style={{
-  position: "absolute", top: "50%", left: "50%",
-  transform: "translate(-50%,-50%)",
-  width: orbitR * 0.68, height: orbitR * 0.68,
-  borderRadius: "50%",
-  zIndex: 20,
-  animation: "adHubPulse 3.5s ease-in-out infinite",
-  overflow: "hidden",
-  display: "flex", alignItems: "center", justifyContent: "center",
-  background: "transparent",
-}}>
-  <img
-    src={AUTO_DOSE_LOGO}
-    alt="AutoDose"
-    style={{
-      width: "130%",
-      height: "130%",
-      objectFit: "cover",
-      objectPosition: "center",
-      mixBlendMode: "screen",
-      filter: "drop-shadow(0 0 20px rgba(220,38,38,0.9)) brightness(1.15)",
-    }}
-    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-  />
-</div>
+          {/* Center hub */}
+          <div style={{
+            position: "absolute", top: "50%", left: "50%",
+            transform: "translate(-50%,-50%)",
+            width: orbitR * 0.68, height: orbitR * 0.68,
+            borderRadius: "50%",
+            zIndex: 20,
+            animation: "adHubPulse 3.5s ease-in-out infinite",
+            overflow: "hidden",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "transparent",
+          }}>
+            <img
+              src={AUTO_DOSE_LOGO}
+              alt="AutoDose"
+              style={{
+                width: "130%",
+                height: "130%",
+                objectFit: "cover",
+                objectPosition: "center",
+                mixBlendMode: "screen",
+                filter: "drop-shadow(0 0 20px rgba(220,38,38,0.9)) brightness(1.15)",
+              }}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+            />
+          </div>
 
-          {/* Cards */}
-          {SERVICES.map((service, i) => {
-            const angle = time * SPEED + PHASES[i];
-            return <ServiceCard key={service.id} service={service}
-              x={Math.cos(angle) * orbitR} y={Math.sin(angle) * orbitR} />;
-          })}
+          {/* ✅ FIX: Cards receive a ref callback instead of x/y props
+              The rAF loop writes transform directly to the DOM node */}
+          {SERVICES.map((service, i) => (
+            <ServiceCard
+              key={service.id}
+              service={service}
+              cardRef={(el) => { cardRefs.current[i] = el; }}
+            />
+          ))}
         </div>
 
         <EpicButton />
