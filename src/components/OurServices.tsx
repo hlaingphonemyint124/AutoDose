@@ -1,12 +1,20 @@
 "use client";
 import React, {
-  useEffect, useRef, useState, memo, useCallback,
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  memo,
+  ReactNode,
+  FC,
 } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 
-// ─── Asset imports (Vite hashes these at build — string paths 404 in prod) ───
+// ─── Asset imports ────────────────────────────────────────────────────────────
 import autoLogo  from "@/assets/autodose.png";
 import imgElite  from "@/assets/rx8.jpg";
 import imgMotion from "@/assets/aristo.jpg";
@@ -14,7 +22,6 @@ import imgLife   from "@/assets/lifestyle.jpg";
 import imgShop   from "@/assets/shop.png";
 
 const AUTO_DOSE_LOGO = autoLogo;
-const IMAGES = { elite: imgElite, motion: imgMotion, lifestyle: imgLife, shop: imgShop } as const;
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 type ServiceItem = {
@@ -29,15 +36,90 @@ type ServiceItem = {
 };
 
 const SERVICES: ServiceItem[] = [
-  { id: "01", titleWhite: "ELITE",     titleRed: "CAPTURE",  description: "JDM & Supercar Photography",    image: IMAGES.elite,     route: "/gallery" },
-  { id: "02", titleWhite: "MOTION",    titleRed: "MASTERY",  description: "Cinematic Rolling Shots",       image: IMAGES.motion,    route: "/videos" },
-  { id: "03", titleWhite: "LIFESTYLE", titleRed: "VLOGS",    description: "Weekly Car Culture Updates",    image: IMAGES.lifestyle, isVlog: true, route: "/videos" },
-  { id: "04", titleWhite: "AUTODOSE",  titleRed: "SHOP",     description: "Premium Car Parts",            image: IMAGES.shop, comingSoon: true, route: "/shop" },
+  { id: "01", titleWhite: "ELITE",     titleRed: "CAPTURE",  description: "JDM & Supercar Photography. We hunt the best angles, the golden hour light, and the moments that make your build legendary.",    image: imgElite,  route: "/gallery" },
+  { id: "02", titleWhite: "MOTION",    titleRed: "MASTERY",  description: "Cinematic Rolling Shots. High-speed, high-drama footage captured from moving vehicles for that pure automotive cinema feel.",       image: imgMotion, route: "/videos" },
+  { id: "03", titleWhite: "LIFESTYLE", titleRed: "VLOGS",    description: "Weekly Car Culture Updates. Raw, unfiltered coverage of events, builds, and everything that drives the JDM community forward.",    image: imgLife,   isVlog: true, route: "/videos" },
+  { id: "04", titleWhite: "AUTODOSE",  titleRed: "SHOP",     description: "Premium Car Parts — coming soon. Curated OEM+ and aftermarket components for enthusiasts who refuse to settle for ordinary.",         image: imgShop,   comingSoon: true, route: "/shop" },
 ];
 
-const PHASES = [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
-const SPEED  = 0.28;
-const BASE_R = 210;
+// ─── Progressive Carousel Context ────────────────────────────────────────────
+interface CarouselCtx {
+  active: string;
+  progress: number;
+  handleClick: (value: string) => void;
+}
+
+const CarouselContext = createContext<CarouselCtx | undefined>(undefined);
+
+const useCarousel = () => {
+  const ctx = useContext(CarouselContext);
+  if (!ctx) throw new Error("useCarousel must be used within CarouselProvider");
+  return ctx;
+};
+
+// ─── Carousel Provider ────────────────────────────────────────────────────────
+const CarouselProvider: FC<{
+  children: ReactNode;
+  initialActive: string;
+  duration?: number;
+  fastDuration?: number;
+}> = ({ children, initialActive, duration = 5500, fastDuration = 380 }) => {
+  const [active, setActive]       = useState(initialActive);
+  const [progress, setProgress]   = useState(0);
+  const [fastFwd, setFastFwd]     = useState(false);
+  const frameRef    = useRef(0);
+  const startRef    = useRef(performance.now());
+  const targetRef   = useRef<string | null>(null);
+  const progressRef = useRef(0);
+  const values      = SERVICES.map((s) => s.id);
+
+  useEffect(() => {
+    const tick = (now: number) => {
+      const cur = fastFwd ? fastDuration : duration;
+      const elapsed = now - startRef.current;
+      const frac = elapsed / cur;
+
+      if (frac <= 1) {
+        const p = fastFwd
+          ? progressRef.current + (100 - progressRef.current) * frac
+          : frac * 100;
+        setProgress(p);
+        frameRef.current = requestAnimationFrame(tick);
+      } else {
+        if (fastFwd) {
+          setFastFwd(false);
+          if (targetRef.current !== null) {
+            setActive(targetRef.current);
+            targetRef.current = null;
+          }
+        } else {
+          const idx = values.indexOf(active);
+          setActive(values[(idx + 1) % values.length]);
+        }
+        progressRef.current = 0;
+        setProgress(0);
+        startRef.current = performance.now();
+      }
+    };
+    startRef.current = performance.now();
+    frameRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frameRef.current);
+  }, [active, fastFwd, duration, fastDuration]);
+
+  const handleClick = useCallback((value: string) => {
+    if (value === active) return;
+    progressRef.current = progress;
+    targetRef.current = value;
+    setFastFwd(true);
+    startRef.current = performance.now();
+  }, [active, progress]);
+
+  return (
+    <CarouselContext.Provider value={{ active, progress, handleClick }}>
+      {children}
+    </CarouselContext.Provider>
+  );
+};
 
 // ─── Neural Noise WebGL background ───────────────────────────────────────────
 const NeuralNoiseBg = memo(() => {
@@ -51,44 +133,33 @@ const NeuralNoiseBg = memo(() => {
 
     const mkShader = (src: string, type: number) => {
       const s = gl.createShader(type)!;
-      gl.shaderSource(s, src);
-      gl.compileShader(s);
-      return s;
+      gl.shaderSource(s, src); gl.compileShader(s); return s;
     };
     const prog = gl.createProgram()!;
     gl.attachShader(prog, mkShader(`precision mediump float;varying vec2 vUv;attribute vec2 a;void main(){vUv=.5*(a+1.);gl_Position=vec4(a,0,1);}`, gl.VERTEX_SHADER));
     gl.attachShader(prog, mkShader(`
-      precision mediump float;
-      varying vec2 vUv;
+      precision mediump float;varying vec2 vUv;
       uniform float uT,uR;uniform vec2 uP;uniform vec3 uC;
       vec2 rot(vec2 u,float t){return mat2(cos(t),sin(t),-sin(t),cos(t))*u;}
-      float ns(vec2 u,float t,float p){
-        vec2 s=vec2(0),r=vec2(0);float sc=8.;
+      float ns(vec2 u,float t,float p){vec2 s=vec2(0),r=vec2(0);float sc=8.;
         for(int j=0;j<15;j++){u=rot(u,1.);s=rot(s,1.);vec2 l=u*sc+float(j)+s-t;s+=sin(l)+2.4*p;r+=(0.5+0.5*cos(l))/sc;sc*=1.2;}
-        return r.x+r.y;
-      }
-      void main(){
-        vec2 u=.5*vUv;u.x*=uR;vec2 p=vUv-uP;p.x*=uR;
+        return r.x+r.y;}
+      void main(){vec2 u=.5*vUv;u.x*=uR;vec2 p=vUv-uP;p.x*=uR;
         float p2=clamp(length(p),0.,1.);p2=.5*pow(1.-p2,2.);
         float n=ns(u,0.0008*uT,p2);n=1.2*pow(n,3.);n+=pow(n,10.);
-        n=max(0.,n-.5);n*=(1.-length(vUv-.5));
-        gl_FragColor=vec4(uC*n,n);
-      }
+        n=max(0.,n-.5);n*=(1.-length(vUv-.5));gl_FragColor=vec4(uC*n,n);}
     `, gl.FRAGMENT_SHADER));
-    gl.linkProgram(prog);
-    gl.useProgram(prog);
+    gl.linkProgram(prog); gl.useProgram(prog);
 
     const u: Record<string, WebGLUniformLocation | null> = {};
     for (let i = 0; i < (gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS) as number); i++) {
-      const n = gl.getActiveUniform(prog, i)!.name;
-      u[n] = gl.getUniformLocation(prog, n);
+      const n = gl.getActiveUniform(prog, i)!.name; u[n] = gl.getUniformLocation(prog, n);
     }
     const buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
     const al = gl.getAttribLocation(prog, "a");
-    gl.enableVertexAttribArray(al);
-    gl.vertexAttribPointer(al, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(al); gl.vertexAttribPointer(al, 2, gl.FLOAT, false, 0, 0);
     gl.uniform3f(u.uC, 0.86, 0.15, 0.15);
 
     const ptr = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5 };
@@ -102,178 +173,21 @@ const NeuralNoiseBg = memo(() => {
     window.addEventListener("resize", resize);
     const onMove = (e: PointerEvent) => { ptr.tx = e.clientX / window.innerWidth; ptr.ty = e.clientY / window.innerHeight; };
     window.addEventListener("pointermove", onMove);
-
     let raf: number;
     const loop = () => {
       ptr.x += (ptr.tx - ptr.x) * 0.06; ptr.y += (ptr.ty - ptr.y) * 0.06;
-      gl.uniform1f(u.uT, performance.now());
-      gl.uniform2f(u.uP, ptr.x, 1 - ptr.y);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      raf = requestAnimationFrame(loop);
+      gl.uniform1f(u.uT, performance.now()); gl.uniform2f(u.uP, ptr.x, 1 - ptr.y);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); raf = requestAnimationFrame(loop);
     };
     loop();
     return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); window.removeEventListener("pointermove", onMove); };
   }, []);
 
-  return <canvas ref={ref} aria-hidden className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.72 }} />;
+  return <canvas ref={ref} aria-hidden className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.6 }} />;
 });
 NeuralNoiseBg.displayName = "NeuralNoiseBg";
 
-// ─── Corner brackets ──────────────────────────────────────────────────────────
-const CORNERS = [
-  { cls: "top-0 left-0",     d: "M0 8V0h8" },
-  { cls: "top-0 right-0",    d: "M10 8V0H2" },
-  { cls: "bottom-0 left-0",  d: "M0 2v8h8" },
-  { cls: "bottom-0 right-0", d: "M10 2v8H2" },
-];
-const CornerBrackets = ({ hovered }: { hovered: boolean }) => (
-  <>{CORNERS.map(({ cls, d }, i) => (
-    <span key={i} className={`absolute ${cls} w-[10px] h-[10px] pointer-events-none`}>
-      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-        <path d={d} stroke={hovered ? "#dc2626" : "rgba(220,38,38,0.28)"} strokeWidth="2" style={{ transition: "stroke 0.25s" }} />
-      </svg>
-    </span>
-  ))}</>
-);
-
-// ─── Glow sweep border ────────────────────────────────────────────────────────
-const CardBorder = ({ hovered }: { hovered: boolean }) => (
-  <>
-    <motion.div aria-hidden className="pointer-events-none absolute inset-0 z-20"
-      animate={{ boxShadow: hovered ? "0 0 0 1px #dc2626, 0 8px 32px rgba(220,38,38,0.22)" : "0 0 0 1px rgba(220,38,38,0.2)" }}
-      transition={{ duration: 0.25 }} />
-    <AnimatePresence>
-      {hovered && (
-        <motion.div aria-hidden className="pointer-events-none absolute inset-x-0 z-30 h-px"
-          style={{ background: "linear-gradient(to right, transparent, #dc2626 50%, transparent)" }}
-          initial={{ top: "0%", opacity: 0 }} animate={{ top: "100%", opacity: [0, 1, 1, 0] }}
-          exit={{ opacity: 0 }} transition={{ duration: 0.9, ease: "linear" }} />
-      )}
-    </AnimatePresence>
-    <motion.div aria-hidden className="pointer-events-none absolute bottom-0 left-0 h-[2px] z-30"
-      style={{ background: "linear-gradient(to right, #dc2626, #ef4444, transparent)" }}
-      animate={{ width: hovered ? "100%" : "0%" }}
-      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }} />
-  </>
-);
-
-// ─── Service card ─────────────────────────────────────────────────────────────
-// KEY CHANGE: removed x/y props, accepts cardRef for direct DOM positioning
-const ServiceCard = memo(({ service, cardRef }: {
-  service: ServiceItem;
-  cardRef: (el: HTMLDivElement | null) => void;
-}) => {
-  const [hovered, setHovered] = useState(false);
-  const navigate = useNavigate();
-
-  const onClick = useCallback(() => {
-    if (service.comingSoon) return;
-    setTimeout(() => { navigate(service.route); window.scrollTo({ top: 0, behavior: "instant" }); }, 220);
-  }, [service, navigate]);
-
-  return (
-    // This div's transform is now mutated directly by the rAF loop — zero React renders
-    <div
-      ref={cardRef}
-      className="absolute top-1/2 left-1/2 w-[172px]"
-      style={{
-        transform: "translate3d(-50%, -50%, 0)",
-        zIndex: hovered ? 30 : 10,
-        willChange: "transform",
-        backfaceVisibility: "hidden",
-        WebkitBackfaceVisibility: "hidden",
-      }}
-      tabIndex={service.comingSoon ? -1 : 0}
-      role="button"
-      aria-label={`${service.titleWhite} ${service.titleRed} — ${service.description}`}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onClick(); }}
-    >
-      <motion.div
-        className="relative w-[172px] overflow-hidden"
-        style={{ background: "rgba(10,10,10,0.96)", cursor: service.comingSoon ? "default" : "pointer", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
-        onHoverStart={() => setHovered(true)}
-        onHoverEnd={() => setHovered(false)}
-        onFocus={() => setHovered(true)}
-        onBlur={() => setHovered(false)}
-        onClick={onClick}
-        whileTap={service.comingSoon ? {} : { scale: 0.97 }}
-        transition={{ type: "spring", stiffness: 400, damping: 30 }}
-      >
-        <CardBorder hovered={hovered} />
-        <CornerBrackets hovered={hovered} />
-
-        {/* Image — 16:9 */}
-        <div className="relative w-full overflow-hidden" style={{ aspectRatio: "16 / 9" }}>
-          <motion.img
-            src={service.image}
-            alt={`${service.titleWhite} ${service.titleRed}`}
-            className="w-full h-full object-cover"
-            style={{ filter: "brightness(0.72) saturate(0.82)" }}
-            animate={{ scale: hovered ? 1.08 : 1 }}
-            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-            onError={(e) => {
-              const el = e.currentTarget as HTMLImageElement;
-              el.style.opacity = "0";
-            }}
-          />
-          <div aria-hidden className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(6,6,6,.92) 0%, rgba(6,6,6,.25) 55%, transparent 100%)" }} />
-          {service.isVlog && (
-            <div className="absolute top-2 right-2 z-10 flex items-center gap-1 bg-black/80 px-[7px] py-[3px] border border-white/10">
-              <span className="w-[5px] h-[5px] rounded-full bg-red-600" style={{ animation: "adBlink 1.4s ease-in-out infinite" }} />
-              <span className="text-[8px] font-bold text-white tracking-[.12em]">REC</span>
-            </div>
-          )}
-          {service.comingSoon && (
-            <div className="absolute top-2 left-2 z-10 flex items-center gap-1"
-              style={{ background: "#dc2626", padding: "3px 8px", clipPath: "polygon(0 0, 100% 0, calc(100% - 6px) 100%, 0 100%)" }}>
-              <span className="w-[4px] h-[4px] rounded-full bg-white flex-shrink-0" style={{ animation: "adBlink 1.4s ease-in-out infinite" }} />
-              <span className="text-white font-black text-[7px] tracking-[.15em] uppercase">COMING SOON</span>
-            </div>
-          )}
-        </div>
-
-        {/* Body */}
-        <div className="px-3 pt-[10px] pb-1">
-          <motion.p className="text-red-600 font-black text-[8px] tracking-[.3em] mb-[5px]"
-            style={{ fontFamily: "'Orbitron', sans-serif" }} animate={{ x: hovered ? 2 : 0 }} transition={{ duration: 0.2 }}>
-            {service.id}
-          </motion.p>
-          <motion.h3 className="font-black italic uppercase leading-tight text-white mb-[5px]"
-            style={{ fontFamily: "'Orbitron', sans-serif", fontSize: "11.5px" }} animate={{ x: hovered ? 2 : 0 }} transition={{ duration: 0.2 }}>
-            {service.titleWhite}{" "}
-            <motion.span style={{ color: "#dc2626" }}
-              animate={{ textShadow: hovered ? "0 0 14px rgba(220,38,38,0.9)" : "0 0 0px rgba(220,38,38,0)" }}>
-              {service.titleRed}
-            </motion.span>
-          </motion.h3>
-          <p className="text-[9.5px] text-zinc-500 uppercase tracking-[.1em] leading-[1.5]">{service.description}</p>
-        </div>
-
-        {/* Footer */}
-        <div className="px-3 pb-[10px] pt-[6px] flex justify-end">
-          {!service.comingSoon && (
-            <motion.div className="w-[22px] h-[22px] flex items-center justify-center"
-              style={{ border: "1px solid rgba(220,38,38,0.3)" }}
-              animate={{ borderColor: hovered ? "#dc2626" : "rgba(220,38,38,0.3)", background: hovered ? "rgba(220,38,38,0.14)" : "transparent" }}
-              transition={{ duration: 0.2 }}>
-              <ArrowRight size={10} className="text-red-600" />
-            </motion.div>
-          )}
-        </div>
-      </motion.div>
-    </div>
-  );
-});
-ServiceCard.displayName = "ServiceCard";
-
-// ─── Orbit ring ───────────────────────────────────────────────────────────────
-const OrbitRing = ({ radius, delay = 0 }: { radius: number; delay?: number }) => (
-  <div aria-hidden className="absolute top-1/2 left-1/2 rounded-full pointer-events-none"
-    style={{ width: radius * 2, height: radius * 2, transform: "translate(-50%,-50%)",
-      border: "1px solid rgba(220,38,38,0.18)", animation: `adRingPulse 5s ease-in-out ${delay}s infinite` }} />
-);
-
-// ─── CTA button ───────────────────────────────────────────────────────────────
+// ─── CTA Button ───────────────────────────────────────────────────────────────
 const EpicButton = () => {
   const navigate = useNavigate();
   const [hovered, setHovered] = useState(false);
@@ -289,12 +203,11 @@ const EpicButton = () => {
 
   return (
     <motion.button
-      className="relative mt-10 flex items-center gap-[10px] overflow-hidden border-none outline-none"
+      className="relative flex items-center gap-[10px] overflow-hidden border-none outline-none"
       style={{ padding: "14px 40px", background: "#dc2626", clipPath: "polygon(13px 0%,100% 0%,calc(100% - 13px) 100%,0% 100%)", cursor: "pointer" }}
       onHoverStart={() => setHovered(true)} onHoverEnd={() => setHovered(false)}
       onClick={onClick}
-      animate={{ background: hovered ? "#b91c1c" : "#dc2626",
-        boxShadow: hovered ? "0 0 0 1px rgba(220,38,38,0.4), 0 0 40px rgba(220,38,38,0.6)" : "0 0 20px rgba(220,38,38,0.35)" }}
+      animate={{ background: hovered ? "#b91c1c" : "#dc2626", boxShadow: hovered ? "0 0 0 1px rgba(220,38,38,0.4), 0 0 40px rgba(220,38,38,0.6)" : "0 0 20px rgba(220,38,38,0.35)" }}
       whileHover={{ scale: 1.035 }} whileTap={{ scale: 0.965 }} transition={{ duration: 0.25 }}
     >
       {ripples.map(({ x, y, id }) => (
@@ -314,75 +227,174 @@ const EpicButton = () => {
   );
 };
 
+// ─── Active slide image panel ─────────────────────────────────────────────────
+const SlideImage = () => {
+  const { active } = useCarousel();
+  const service = SERVICES.find((s) => s.id === active)!;
+
+  return (
+    <div className="relative w-full overflow-hidden rounded-sm" style={{ aspectRatio: "16/9" }}>
+      <AnimatePresence mode="popLayout">
+        <motion.div
+          key={active}
+          className="absolute inset-0"
+          initial={{ opacity: 0, scale: 1.04 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.98 }}
+          transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <img
+            src={service.image}
+            alt={`${service.titleWhite} ${service.titleRed}`}
+            className="w-full h-full object-cover"
+            style={{ filter: "brightness(0.78) saturate(0.85)" }}
+          />
+          {/* Gradient overlay */}
+          <div aria-hidden className="absolute inset-0"
+            style={{ background: "linear-gradient(to top, rgba(6,6,6,.95) 0%, rgba(6,6,6,.3) 50%, transparent 100%)" }} />
+          {/* Red accent line bottom */}
+          <div aria-hidden className="absolute bottom-0 left-0 right-0 h-[2px]"
+            style={{ background: "linear-gradient(to right, #dc2626, #ef4444 40%, transparent)" }} />
+
+          {/* Badge overlay */}
+          <div className="absolute top-3 left-3 flex items-center gap-2">
+            {service.isVlog && (
+              <div className="flex items-center gap-1 bg-black/80 px-[7px] py-[3px] border border-white/10">
+                <span className="w-[5px] h-[5px] rounded-full bg-red-600" style={{ animation: "adBlink 1.4s ease-in-out infinite" }} />
+                <span className="text-[8px] font-bold text-white tracking-[.12em]">REC</span>
+              </div>
+            )}
+            {service.comingSoon && (
+              <div className="flex items-center gap-1"
+                style={{ background: "#dc2626", padding: "3px 10px", clipPath: "polygon(0 0, 100% 0, calc(100% - 6px) 100%, 0 100%)" }}>
+                <span className="w-[4px] h-[4px] rounded-full bg-white flex-shrink-0" style={{ animation: "adBlink 1.4s ease-in-out infinite" }} />
+                <span className="text-white font-black text-[7px] tracking-[.15em] uppercase">COMING SOON</span>
+              </div>
+            )}
+          </div>
+
+          {/* ID watermark */}
+          <div className="absolute bottom-4 right-4 text-white/10 font-black italic"
+            style={{ fontFamily: "'Orbitron', sans-serif", fontSize: "clamp(40px, 8vw, 72px)", lineHeight: 1, userSelect: "none" }}>
+            {service.id}
+          </div>
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+};
+
+// ─── Active slide text ─────────────────────────────────────────────────────────
+const SlideText = () => {
+  const { active } = useCarousel();
+  const navigate = useNavigate();
+  const service = SERVICES.find((s) => s.id === active)!;
+
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={active}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -6 }}
+        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+        className="flex flex-col gap-3"
+      >
+        <p className="text-red-600 font-black text-[8px] tracking-[.35em]"
+          style={{ fontFamily: "'Orbitron', sans-serif" }}>{service.id}</p>
+        <h3 className="font-black italic uppercase leading-tight"
+          style={{ fontFamily: "'Orbitron', sans-serif", fontSize: "clamp(20px, 4vw, 30px)" }}>
+          <span className="text-white">{service.titleWhite} </span>
+          <span style={{ color: "#dc2626", textShadow: "0 0 18px rgba(220,38,38,0.55)" }}>{service.titleRed}</span>
+        </h3>
+        <p className="text-zinc-400 text-[11px] leading-[1.7] tracking-[.06em] max-w-sm">{service.description}</p>
+        {!service.comingSoon && (
+          <motion.button
+            className="mt-1 flex items-center gap-2 self-start text-[9px] font-bold italic tracking-[.25em] uppercase text-red-500 border border-red-600/30 px-4 py-2 hover:bg-red-600/10 transition-colors"
+            style={{ fontFamily: "'Orbitron', sans-serif" }}
+            whileHover={{ x: 3 }}
+            transition={{ duration: 0.18 }}
+            onClick={() => { navigate(service.route); window.scrollTo({ top: 0, behavior: "instant" }); }}
+          >
+            EXPLORE <ArrowRight size={10} />
+          </motion.button>
+        )}
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
+// ─── Slider button ─────────────────────────────────────────────────────────────
+const SliderBtn: FC<{ service: ServiceItem }> = ({ service }) => {
+  const { active, progress, handleClick } = useCarousel();
+  const isActive = active === service.id;
+
+  return (
+    <button
+      className="relative text-left cursor-pointer px-4 py-3 border-b border-white/5 last:border-b-0 transition-colors overflow-hidden"
+      style={{ background: isActive ? "rgba(220,38,38,0.07)" : "transparent" }}
+      onClick={() => handleClick(service.id)}
+    >
+      {/* Progress bar background sweep */}
+      <div
+        aria-hidden
+        className="absolute inset-0 -z-10 pointer-events-none"
+        role="progressbar"
+        aria-valuenow={isActive ? progress : 0}
+      >
+        <span
+          className="absolute inset-y-0 left-0 block"
+          style={{
+            width: isActive ? `${progress}%` : "0%",
+            background: "linear-gradient(to right, rgba(220,38,38,0.18), rgba(220,38,38,0.06))",
+            transition: isActive ? "none" : "width 0.3s",
+          }}
+        />
+      </div>
+
+      {/* Left accent line */}
+      <motion.div
+        className="absolute left-0 top-0 bottom-0 w-[2px]"
+        animate={{ background: isActive ? "#dc2626" : "rgba(220,38,38,0.15)", scaleY: isActive ? 1 : 0.4, opacity: isActive ? 1 : 0.4 }}
+        transition={{ duration: 0.25 }}
+      />
+
+      <div className="flex items-start gap-3 pl-2">
+        <span
+          className="text-[7px] font-black tracking-[.2em] mt-[2px] flex-shrink-0"
+          style={{ fontFamily: "'Orbitron', sans-serif", color: isActive ? "#dc2626" : "rgba(220,38,38,0.35)" }}>
+          {service.id}
+        </span>
+        <div>
+          <p
+            className="font-black italic uppercase text-[9px] tracking-[.15em] leading-tight mb-[3px]"
+            style={{ fontFamily: "'Orbitron', sans-serif", color: isActive ? "#fff" : "rgba(255,255,255,0.35)" }}>
+            {service.titleWhite} <span style={{ color: isActive ? "#dc2626" : "rgba(220,38,38,0.35)" }}>{service.titleRed}</span>
+          </p>
+          <p className="text-[9px] tracking-[.05em] leading-snug line-clamp-1"
+            style={{ color: isActive ? "rgba(161,161,170,1)" : "rgba(161,161,170,0.35)" }}>
+            {service.description}
+          </p>
+        </div>
+      </div>
+    </button>
+  );
+};
+
 // ─── Main section ─────────────────────────────────────────────────────────────
 export default function OurServices() {
-  // ✅ FIX: time & paused moved from useState → useRef
-  // This means the animation loop NEVER triggers a React re-render
-  const timeRef   = useRef(0);
-  const pausedRef = useRef(false);
-  const lastTsRef = useRef<number | null>(null);
-
-  // One ref slot per card — populated by the cardRef callback on each ServiceCard
-  const cardRefs  = useRef<(HTMLDivElement | null)[]>([]);
-
-  const stageRef  = useRef<HTMLDivElement>(null);
-  const [orbitR,  setOrbitR] = useState(BASE_R);
-
-  // Responsive orbit radius
-  useEffect(() => {
-    const calc = () => {
-      const vw = Math.min(window.innerWidth, 680);
-      setOrbitR(Math.min(BASE_R, vw * 0.32));
-    };
-    calc();
-    window.addEventListener("resize", calc);
-    return () => window.removeEventListener("resize", calc);
-  }, []);
-
-  // ✅ FIX: Animation loop — pure DOM mutation, zero React renders per frame
-  // Skips React reconciler entirely → no virtual DOM diff → no jank
-  useEffect(() => {
-    let raf: number;
-
-    const tick = (ts: number) => {
-      if (lastTsRef.current !== null && !pausedRef.current) {
-        timeRef.current += (ts - lastTsRef.current) / 1000;
-      }
-      lastTsRef.current = ts;
-
-      const t = timeRef.current;
-
-      cardRefs.current.forEach((el, i) => {
-        if (!el) return;
-        const angle = t * SPEED + PHASES[i];
-        const x = Math.cos(angle) * orbitR;
-        const y = Math.sin(angle) * orbitR;
-        // Direct style mutation — bypasses React, goes straight to browser compositor
-        el.style.transform = `translate3d(calc(${x}px - 50%), calc(${y}px - 50%), 0)`;
-      });
-
-      raf = requestAnimationFrame(tick);
-    };
-
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [orbitR]); // re-bind only when radius changes (responsive resize)
-
-  const stageSz = orbitR * 2 + 320;
-
   return (
     <section className="relative w-full overflow-hidden text-white"
       style={{ background: "#060606", minHeight: "100vh" }}>
 
-      {/* WebGL — CSS gradient fallback if WebGL unavailable */}
+      {/* Backgrounds */}
       <div aria-hidden className="absolute inset-0"
         style={{ background: "radial-gradient(ellipse 80% 70% at 50% 50%, rgba(80,10,10,0.55) 0%, #060606 70%)" }} />
       <NeuralNoiseBg />
-
       <div aria-hidden className="absolute inset-0 z-[1] pointer-events-none"
         style={{ background: "radial-gradient(ellipse 60% 55% at 50% 50%, rgba(220,38,38,0.07) 0%, transparent 68%)" }} />
 
-      <div className="relative z-10 flex flex-col items-center px-5 sm:px-8 py-14 lg:py-20 max-w-3xl mx-auto">
+      <div className="relative z-10 flex flex-col items-center px-5 sm:px-8 py-14 lg:py-20 max-w-5xl mx-auto">
 
         {/* Header */}
         <motion.div className="flex items-center gap-3 mb-3"
@@ -407,68 +419,57 @@ export default function OurServices() {
           Built for car enthusiasts. Driven by passion.
         </motion.p>
 
-        {/* Orbit stage */}
-        <div
-          ref={stageRef}
-          className="relative flex-shrink-0"
-          style={{ width: stageSz, height: stageSz, maxWidth: "100%" }}
-          // ✅ FIX: pausedRef.current = true/false — no state, no re-render
-          onMouseEnter={() => { pausedRef.current = true; }}
-          onMouseLeave={() => { pausedRef.current = false; }}
-        >
-          <OrbitRing radius={orbitR} delay={0} />
-          <OrbitRing radius={orbitR * 1.12} delay={2} />
+        {/* Carousel */}
+        <CarouselProvider initialActive="01" duration={5500}>
+          <motion.div
+            className="w-full flex flex-col lg:flex-row gap-0"
+            style={{ border: "1px solid rgba(220,38,38,0.15)", background: "rgba(10,10,10,0.92)", backdropFilter: "blur(12px)" }}
+            initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }} transition={{ duration: 0.6, delay: 0.3 }}
+          >
+            {/* Left: image + text */}
+            <div className="flex flex-col flex-1 min-w-0">
+              <SlideImage />
+              <div className="px-6 py-5 flex flex-col gap-4 flex-1">
+                <SlideText />
+              </div>
+            </div>
 
-          {/* Center hub — circular, no black bg */}
-<div style={{
-  position: "absolute", top: "50%", left: "50%",
-  transform: "translate(-50%,-50%)",
-  width: orbitR * 0.68, height: orbitR * 0.68,
-  borderRadius: "50%",
-  zIndex: 20,
-  animation: "adHubPulse 3.5s ease-in-out infinite",
-  overflow: "hidden",
-  display: "flex", alignItems: "center", justifyContent: "center",
-  background: "transparent",
-}}>
-  <img
-    src={AUTO_DOSE_LOGO}
-    alt="AutoDose"
-    style={{
-      width: "130%",
-      height: "130%",
-      objectFit: "cover",
-      objectPosition: "center",
-      mixBlendMode: "screen",
-      filter: "drop-shadow(0 0 20px rgba(220,38,38,0.9)) brightness(1.15)",
-    }}
-    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-  />
-</div>
+            {/* Divider */}
+            <div className="hidden lg:block w-px self-stretch" style={{ background: "rgba(220,38,38,0.12)" }} />
+            <div className="block lg:hidden h-px w-full" style={{ background: "rgba(220,38,38,0.12)" }} />
 
-          {/* ✅ FIX: Cards receive a ref callback instead of x/y props
-              The rAF loop writes transform directly to the DOM node */}
-          {SERVICES.map((service, i) => (
-            <ServiceCard
-              key={service.id}
-              service={service}
-              cardRef={(el) => { cardRefs.current[i] = el; }}
-            />
-          ))}
+            {/* Right: slider buttons */}
+            <div className="lg:w-[260px] xl:w-[300px] flex-shrink-0 flex flex-col">
+              {/* Logo header */}
+              <div className="px-5 py-4 flex items-center gap-3 border-b" style={{ borderColor: "rgba(220,38,38,0.12)" }}>
+                <img
+                  src={AUTO_DOSE_LOGO}
+                  alt="AutoDose"
+                  className="w-8 h-8 object-contain"
+                  style={{ mixBlendMode: "screen", filter: "drop-shadow(0 0 8px rgba(220,38,38,0.7))" }}
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                />
+                <span className="text-white/40 font-black italic text-[8px] tracking-[.3em] uppercase"
+                  style={{ fontFamily: "'Orbitron', sans-serif" }}>SERVICES</span>
+              </div>
+              {/* Buttons */}
+              <div className="flex flex-col flex-1">
+                {SERVICES.map((service) => (
+                  <SliderBtn key={service.id} service={service} />
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        </CarouselProvider>
+
+        {/* CTA */}
+        <div className="mt-10">
+          <EpicButton />
         </div>
-
-        <EpicButton />
       </div>
 
       <style>{`
-        @keyframes adHubPulse {
-          0%,100% { filter: drop-shadow(0 0 8px rgba(220,38,38,0.25)); }
-          50%      { filter: drop-shadow(0 0 28px rgba(220,38,38,0.65)) drop-shadow(0 0 6px rgba(220,38,38,0.4)); }
-        }
-        @keyframes adRingPulse {
-          0%,100% { box-shadow: 0 0 28px rgba(220,38,38,0.06), inset 0 0 28px rgba(220,38,38,0.03); }
-          50%      { box-shadow: 0 0 60px rgba(220,38,38,0.16), inset 0 0 50px rgba(220,38,38,0.08); }
-        }
         @keyframes adBlink { 0%,100% { opacity:1; } 50% { opacity:0.12; } }
       `}</style>
     </section>
