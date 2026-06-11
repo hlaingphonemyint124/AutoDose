@@ -15,46 +15,38 @@ interface Photo {
 
 const FILTERS = ["All", "JDM", "Supercar", "Street", "Meet", "Build"];
 
-function distribute<T>(items: T[], cols: number): T[][] {
-  const columns: T[][] = Array.from({ length: cols }, () => []);
-  items.forEach((item, i) => columns[i % cols].push(item));
-  return columns;
-}
-
 // ── Photo tile ────────────────────────────────────────────────────────────────
-// Uses native loading="lazy" + a fixed aspect-ratio container so the browser
-// can observe the element and lazy-load correctly on all devices.
-// getOptimizedUrl (Supabase render transform) is intentionally REMOVED —
-// that endpoint requires a paid Supabase plan and returns errors on the free tier,
-// causing every image to show as broken.
+// All images load eagerly — no lazy loading.
+// With ~25 photos this is the right call: lazy loading causes more problems
+// (browser throttling, flex/column position miscalculation) than it solves.
+// HTTP/2 multiplexing handles parallel requests efficiently.
 const PhotoTile = ({
   photo,
   onClick,
-  priority = false,
+  index,
 }: {
   photo: Photo;
   onClick: () => void;
-  priority?: boolean;
+  index: number;
 }) => {
   const [status, setStatus] = useState<"loading" | "loaded" | "error">("loading");
 
   return (
     <div
-      className="relative group cursor-pointer overflow-hidden rounded-xl bg-zinc-900 mb-3 md:mb-4"
+      className="relative group cursor-pointer overflow-hidden rounded-xl bg-zinc-900 break-inside-avoid mb-3 md:mb-4 block"
       onClick={onClick}
     >
-      {/* Fixed aspect-ratio wrapper — always has height so lazy-load triggers */}
-      <div className="relative w-full" style={{ paddingTop: "66.67%" }}>
+      <div style={{ aspectRatio: "3/2", position: "relative" }}>
 
-        {/* Shimmer while loading */}
+        {/* Shimmer placeholder */}
         {status === "loading" && (
           <div className="absolute inset-0 shimmer rounded-xl" />
         )}
 
-        {/* Broken image fallback */}
+        {/* Error state */}
         {status === "error" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-zinc-600">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-zinc-600">
               <rect x="3" y="3" width="18" height="18" rx="2" />
               <circle cx="8.5" cy="8.5" r="1.5" />
               <path d="M21 15l-5-5L5 21" />
@@ -65,22 +57,25 @@ const PhotoTile = ({
           </div>
         )}
 
-        {/* Image — always in DOM, always uses the direct storage_url */}
+        {/* Image — eager load, no lazy, no transform, direct URL */}
         <img
           src={photo.storage_url}
           alt={photo.title}
-          loading={priority ? "eager" : "lazy"}
-          fetchPriority={priority ? "high" : "auto"}
+          loading="eager"
+          fetchPriority={index < 8 ? "high" : "auto"}
           decoding="async"
-          className="absolute inset-0 w-full h-full object-cover rounded-xl transition-opacity duration-300"
-          style={{ opacity: status === "loaded" ? 1 : 0 }}
+          className="absolute inset-0 w-full h-full object-cover rounded-xl"
+          style={{
+            opacity: status === "loaded" ? 1 : 0,
+            transition: "opacity 0.35s ease",
+          }}
           onLoad={() => setStatus("loaded")}
           onError={() => setStatus("error")}
         />
       </div>
 
       {/* Hover overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-3 md:p-4 rounded-xl">
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-3 md:p-4 rounded-xl pointer-events-none">
         <div className="translate-y-3 group-hover:translate-y-0 transition-transform duration-300">
           <span className="inline-block px-2 py-0.5 bg-primary/90 text-primary-foreground text-[10px] font-orbitron font-bold rounded-full mb-1.5 capitalize">
             {photo.category}
@@ -92,13 +87,13 @@ const PhotoTile = ({
       </div>
 
       {/* Zoom icon */}
-      <div className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 scale-75 group-hover:scale-100">
+      <div className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 scale-75 group-hover:scale-100 pointer-events-none">
         <ZoomIn size={14} className="text-white" />
       </div>
 
       {/* Corner accents */}
-      <div className="absolute top-2 left-2 w-8 h-8 border-t-2 border-l-2 border-primary/70 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-sm" />
-      <div className="absolute bottom-2 right-2 w-8 h-8 border-b-2 border-r-2 border-primary/70 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-sm" />
+      <div className="absolute top-2 left-2 w-7 h-7 border-t-2 border-l-2 border-primary/70 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-sm pointer-events-none" />
+      <div className="absolute bottom-2 right-2 w-7 h-7 border-b-2 border-r-2 border-primary/70 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-sm pointer-events-none" />
     </div>
   );
 };
@@ -106,13 +101,9 @@ const PhotoTile = ({
 // ── Lightbox image ─────────────────────────────────────────────────────────────
 const LightboxImage = ({ photo }: { photo: Photo }) => {
   const [loaded, setLoaded] = useState(false);
-
   return (
-    <div className="relative w-full max-h-[65vh] bg-black flex items-center justify-center overflow-hidden">
-      {/* Low-opacity placeholder while full image loads */}
-      {!loaded && (
-        <div className="absolute inset-0 shimmer" />
-      )}
+    <div className="relative w-full max-h-[65vh] bg-black flex items-center justify-center overflow-hidden min-h-[200px]">
+      {!loaded && <div className="absolute inset-0 shimmer" />}
       <img
         src={photo.storage_url}
         alt={photo.title}
@@ -146,18 +137,6 @@ const Gallery = () => {
   const [fetchError, setFetchError] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [cols, setCols] = useState(4);
-
-  // Responsive column count
-  useEffect(() => {
-    const update = () => {
-      const w = window.innerWidth;
-      setCols(w < 640 ? 2 : w < 1024 ? 3 : 4);
-    };
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, []);
 
   useEffect(() => { fetchPhotos(); }, []);
 
@@ -165,7 +144,9 @@ const Gallery = () => {
     setFiltered(
       activeFilter === "All"
         ? photos
-        : photos.filter((p) => p.category?.toLowerCase().includes(activeFilter.toLowerCase()))
+        : photos.filter((p) =>
+            p.category?.toLowerCase().includes(activeFilter.toLowerCase())
+          )
     );
   }, [activeFilter, photos]);
 
@@ -202,14 +183,10 @@ const Gallery = () => {
     [selectedIndex, filtered]
   );
 
-  // Preload adjacent lightbox images
   useEffect(() => {
     if (!selectedPhoto || filtered.length === 0) return;
-    const preloadIdx = [
-      (selectedIndex + 1) % filtered.length,
-      (selectedIndex - 1 + filtered.length) % filtered.length,
-    ];
-    preloadIdx.forEach((i) => {
+    [-1, 1].forEach((offset) => {
+      const i = (selectedIndex + offset + filtered.length) % filtered.length;
       const img = new Image();
       img.src = filtered[i].storage_url;
     });
@@ -225,10 +202,6 @@ const Gallery = () => {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [selectedPhoto, navigate]);
-
-  const columns = distribute(filtered, cols);
-  // First 8 photos get priority/eager loading
-  const priorityIds = new Set(filtered.slice(0, 8).map((p) => p.id));
 
   return (
     <section id="gallery" className="py-16 md:py-24 bg-background min-h-screen">
@@ -285,15 +258,23 @@ const Gallery = () => {
           {filtered.length} photo{filtered.length !== 1 ? "s" : ""}
         </motion.p>
 
-        {/* Loading skeleton */}
+        {/* Skeleton */}
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+          <div className="columns-2 sm:columns-3 lg:columns-4 gap-3 md:gap-4">
             {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="aspect-[3/2] rounded-xl shimmer" />
+              <div
+                key={i}
+                className="break-inside-avoid mb-3 md:mb-4 rounded-xl shimmer"
+                style={{ aspectRatio: "3/2" }}
+              />
             ))}
           </div>
         ) : fetchError ? (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-24 space-y-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-24 space-y-4"
+          >
             <p className="text-muted-foreground">Couldn't load photos. Check your connection.</p>
             <button
               onClick={() => { setLoading(true); fetchPhotos(); }}
@@ -313,32 +294,18 @@ const Gallery = () => {
         ) : (
           <motion.div
             key={activeFilter}
-            className="flex gap-3 md:gap-4 items-start"
+            className="columns-2 sm:columns-3 lg:columns-4 gap-3 md:gap-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.25 }}
+            transition={{ duration: 0.3 }}
           >
-            {columns.map((col, ci) => (
-              <div key={ci} className="flex-1 min-w-0">
-                {col.map((photo, pi) => (
-                  <motion.div
-                    key={photo.id}
-                    initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{
-                      duration: 0.38,
-                      ease: [0.22, 1, 0.36, 1],
-                      delay: pi < 4 ? ci * 0.04 + pi * 0.05 : 0,
-                    }}
-                  >
-                    <PhotoTile
-                      photo={photo}
-                      onClick={() => openPhoto(photo)}
-                      priority={priorityIds.has(photo.id)}
-                    />
-                  </motion.div>
-                ))}
-              </div>
+            {filtered.map((photo, index) => (
+              <PhotoTile
+                key={photo.id}
+                photo={photo}
+                onClick={() => openPhoto(photo)}
+                index={index}
+              />
             ))}
           </motion.div>
         )}
@@ -347,7 +314,9 @@ const Gallery = () => {
       {/* Lightbox */}
       <Dialog open={!!selectedPhoto} onOpenChange={() => setSelectedPhoto(null)}>
         <DialogContent className="max-w-6xl p-0 bg-black/95 border-border/40 max-h-[95vh] overflow-hidden">
-          <DialogTitle className="sr-only">Photo Viewer — {selectedPhoto?.title}</DialogTitle>
+          <DialogTitle className="sr-only">
+            Photo Viewer — {selectedPhoto?.title}
+          </DialogTitle>
           <DialogDescription className="sr-only">View full size photo</DialogDescription>
 
           <button
