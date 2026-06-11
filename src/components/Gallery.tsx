@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { X, ZoomIn, ChevronLeft, ChevronRight } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -15,48 +15,18 @@ interface Photo {
 
 const FILTERS = ["All", "JDM", "Supercar", "Street", "Meet", "Build"];
 
-// Spread photos across N columns in reading order so date-sort is preserved
 function distribute<T>(items: T[], cols: number): T[][] {
   const columns: T[][] = Array.from({ length: cols }, () => []);
   items.forEach((item, i) => columns[i % cols].push(item));
   return columns;
 }
 
-// ── Optimized image URL (Supabase transform API for mobile) ──────────────────
-function getOptimizedUrl(url: string, width: number): string {
-  try {
-    // If it's a Supabase storage URL, use the transform endpoint
-    if (url.includes("/storage/v1/object/public/")) {
-      const transformed = url.replace(
-        "/storage/v1/object/public/",
-        "/storage/v1/render/image/public/"
-      );
-      return `${transformed}?width=${width}&quality=75&format=webp`;
-    }
-  } catch (_) {}
-  return url;
-}
-
-// ── Intersection Observer hook for viewport-based loading ────────────────────
-function useInView(rootMargin = "200px") {
-  const ref = useRef<HTMLDivElement>(null);
-  const [inView, setInView] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setInView(true); observer.disconnect(); } },
-      { rootMargin }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [rootMargin]);
-
-  return { ref, inView };
-}
-
 // ── Photo tile ────────────────────────────────────────────────────────────────
+// Uses native loading="lazy" + a fixed aspect-ratio container so the browser
+// can observe the element and lazy-load correctly on all devices.
+// getOptimizedUrl (Supabase render transform) is intentionally REMOVED —
+// that endpoint requires a paid Supabase plan and returns errors on the free tier,
+// causing every image to show as broken.
 const PhotoTile = ({
   photo,
   onClick,
@@ -67,32 +37,23 @@ const PhotoTile = ({
   priority?: boolean;
 }) => {
   const [status, setStatus] = useState<"loading" | "loaded" | "error">("loading");
-  const { ref, inView } = useInView(priority ? "600px" : "200px");
-
-  // Priority images (first 6) start loading immediately
-  const shouldLoad = priority || inView;
-
-  // Use smaller thumbnail for grid, full res for lightbox
-  const thumbUrl = getOptimizedUrl(photo.storage_url, 600);
 
   return (
     <div
-      ref={ref}
-      className="relative group cursor-pointer overflow-hidden rounded-xl bg-muted mb-3 md:mb-4"
+      className="relative group cursor-pointer overflow-hidden rounded-xl bg-zinc-900 mb-3 md:mb-4"
       onClick={onClick}
     >
-      {/* Shimmer placeholder */}
-      {status === "loading" && (
-        <div className="shimmer w-full rounded-xl" style={{ paddingTop: "66.67%" }} />
-      )}
+      {/* Fixed aspect-ratio wrapper — always has height so lazy-load triggers */}
+      <div className="relative w-full" style={{ paddingTop: "66.67%" }}>
 
-      {/* Broken image fallback */}
-      {status === "error" && (
-        <div
-          className="w-full flex flex-col items-center justify-center bg-zinc-900 border border-zinc-800 rounded-xl"
-          style={{ paddingTop: "66.67%", position: "relative" }}
-        >
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+        {/* Shimmer while loading */}
+        {status === "loading" && (
+          <div className="absolute inset-0 shimmer rounded-xl" />
+        )}
+
+        {/* Broken image fallback */}
+        {status === "error" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-zinc-600">
               <rect x="3" y="3" width="18" height="18" rx="2" />
               <circle cx="8.5" cy="8.5" r="1.5" />
@@ -102,30 +63,24 @@ const PhotoTile = ({
               {photo.title}
             </span>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Actual image — only renders when in/near viewport */}
-      {shouldLoad && (
+        {/* Image — always in DOM, always uses the direct storage_url */}
         <img
-          src={thumbUrl}
+          src={photo.storage_url}
           alt={photo.title}
           loading={priority ? "eager" : "lazy"}
           fetchPriority={priority ? "high" : "auto"}
           decoding="async"
-          className="w-full h-auto object-cover block"
-          style={
-            status === "loaded"
-              ? { opacity: 1, transition: "opacity 0.35s ease" }
-              : { opacity: 0, position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }
-          }
+          className="absolute inset-0 w-full h-full object-cover rounded-xl transition-opacity duration-300"
+          style={{ opacity: status === "loaded" ? 1 : 0 }}
           onLoad={() => setStatus("loaded")}
           onError={() => setStatus("error")}
         />
-      )}
+      </div>
 
       {/* Hover overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-3 md:p-4">
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-3 md:p-4 rounded-xl">
         <div className="translate-y-3 group-hover:translate-y-0 transition-transform duration-300">
           <span className="inline-block px-2 py-0.5 bg-primary/90 text-primary-foreground text-[10px] font-orbitron font-bold rounded-full mb-1.5 capitalize">
             {photo.category}
@@ -148,22 +103,15 @@ const PhotoTile = ({
   );
 };
 
-// ── Lightbox image with full-res load ─────────────────────────────────────────
+// ── Lightbox image ─────────────────────────────────────────────────────────────
 const LightboxImage = ({ photo }: { photo: Photo }) => {
   const [loaded, setLoaded] = useState(false);
-  const thumbUrl = getOptimizedUrl(photo.storage_url, 600);
 
   return (
     <div className="relative w-full max-h-[65vh] bg-black flex items-center justify-center overflow-hidden">
-      {/* Blurred thumb shown instantly while full-res loads */}
+      {/* Low-opacity placeholder while full image loads */}
       {!loaded && (
-        <img
-          src={thumbUrl}
-          alt=""
-          aria-hidden
-          className="absolute inset-0 w-full max-h-[65vh] object-contain"
-          style={{ filter: "blur(12px)", transform: "scale(1.05)", opacity: 0.6 }}
-        />
+        <div className="absolute inset-0 shimmer" />
       )}
       <img
         src={photo.storage_url}
@@ -179,9 +127,9 @@ const LightboxImage = ({ photo }: { photo: Photo }) => {
           const parent = el.parentElement;
           if (parent && !parent.querySelector(".img-error-msg")) {
             const div = document.createElement("div");
-            div.className = "img-error-msg w-full flex items-center justify-center bg-zinc-900 text-zinc-500 text-sm py-20";
+            div.className = "img-error-msg w-full flex items-center justify-center bg-zinc-900 text-zinc-500 text-sm py-20 z-10 relative";
             div.textContent = "Image unavailable";
-            parent.insertBefore(div, el);
+            parent.appendChild(div);
           }
         }}
       />
@@ -226,7 +174,7 @@ const Gallery = () => {
       setFetchError(false);
       const { data, error } = await supabase
         .from("photos")
-        .select("id, title, category, storage_url, created_at") // explicit columns — faster
+        .select("id, title, category, storage_url, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
       setPhotos(data || []);
@@ -279,9 +227,8 @@ const Gallery = () => {
   }, [selectedPhoto, navigate]);
 
   const columns = distribute(filtered, cols);
-
-  // First 6 photos get priority loading (above the fold on mobile)
-  const priorityIds = new Set(filtered.slice(0, 6).map((p) => p.id));
+  // First 8 photos get priority/eager loading
+  const priorityIds = new Set(filtered.slice(0, 8).map((p) => p.id));
 
   return (
     <section id="gallery" className="py-16 md:py-24 bg-background min-h-screen">
@@ -381,7 +328,6 @@ const Gallery = () => {
                     transition={{
                       duration: 0.38,
                       ease: [0.22, 1, 0.36, 1],
-                      // Only stagger first 8 — rest appear instantly
                       delay: pi < 4 ? ci * 0.04 + pi * 0.05 : 0,
                     }}
                   >
