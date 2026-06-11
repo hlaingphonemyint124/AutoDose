@@ -16,10 +16,6 @@ interface Photo {
 const FILTERS = ["All", "JDM", "Supercar", "Street", "Meet", "Build"];
 
 // ── Photo tile ────────────────────────────────────────────────────────────────
-// All images load eagerly — no lazy loading.
-// With ~25 photos this is the right call: lazy loading causes more problems
-// (browser throttling, flex/column position miscalculation) than it solves.
-// HTTP/2 multiplexing handles parallel requests efficiently.
 const PhotoTile = ({
   photo,
   onClick,
@@ -33,49 +29,47 @@ const PhotoTile = ({
 
   return (
     <div
-      className="relative group cursor-pointer overflow-hidden rounded-xl bg-zinc-900 break-inside-avoid mb-3 md:mb-4 block"
+      className="relative group cursor-pointer overflow-hidden rounded-xl bg-zinc-900"
       onClick={onClick}
     >
-      <div style={{ aspectRatio: "3/2", position: "relative" }}>
+      {/* Shimmer */}
+      {status === "loading" && (
+        <div className="absolute inset-0 shimmer rounded-xl" />
+      )}
 
-        {/* Shimmer placeholder */}
-        {status === "loading" && (
-          <div className="absolute inset-0 shimmer rounded-xl" />
-        )}
+      {/* Error */}
+      {status === "error" && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-zinc-600">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <path d="M21 15l-5-5L5 21" />
+          </svg>
+          <span className="text-zinc-600 text-[10px] uppercase tracking-widest font-orbitron px-4 text-center line-clamp-2">
+            {photo.title}
+          </span>
+        </div>
+      )}
 
-        {/* Error state */}
-        {status === "error" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-zinc-600">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <path d="M21 15l-5-5L5 21" />
-            </svg>
-            <span className="text-zinc-600 text-[10px] uppercase tracking-widest font-orbitron px-4 text-center line-clamp-2">
-              {photo.title}
-            </span>
-          </div>
-        )}
-
-        {/* Image — eager load, no lazy, no transform, direct URL */}
-        <img
-          src={photo.storage_url}
-          alt={photo.title}
-          loading="eager"
-          fetchPriority={index < 8 ? "high" : "auto"}
-          decoding="async"
-          className="absolute inset-0 w-full h-full object-cover rounded-xl"
-          style={{
-            opacity: status === "loaded" ? 1 : 0,
-            transition: "opacity 0.35s ease",
-          }}
-          onLoad={() => setStatus("loaded")}
-          onError={() => setStatus("error")}
-        />
-      </div>
+      {/* Image fills the fixed-height cell completely */}
+      <img
+        src={photo.storage_url}
+        alt={photo.title}
+        loading="eager"
+        fetchPriority={index < 8 ? "high" : "auto"}
+        decoding="async"
+        className="w-full h-full object-cover"
+        style={{
+          opacity: status === "loaded" ? 1 : 0,
+          transition: "opacity 0.35s ease",
+          display: "block",
+        }}
+        onLoad={() => setStatus("loaded")}
+        onError={() => setStatus("error")}
+      />
 
       {/* Hover overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-3 md:p-4 rounded-xl pointer-events-none">
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-3 md:p-4 pointer-events-none">
         <div className="translate-y-3 group-hover:translate-y-0 transition-transform duration-300">
           <span className="inline-block px-2 py-0.5 bg-primary/90 text-primary-foreground text-[10px] font-orbitron font-bold rounded-full mb-1.5 capitalize">
             {photo.category}
@@ -141,13 +135,16 @@ const Gallery = () => {
   useEffect(() => { fetchPhotos(); }, []);
 
   useEffect(() => {
-    setFiltered(
+    const list =
       activeFilter === "All"
         ? photos
         : photos.filter((p) =>
             p.category?.toLowerCase().includes(activeFilter.toLowerCase())
-          )
-    );
+          );
+    // Always newest-first (already sorted from DB, but enforce here too)
+    setFiltered([...list].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    ));
   }, [activeFilter, photos]);
 
   const fetchPhotos = async () => {
@@ -156,10 +153,9 @@ const Gallery = () => {
       const { data, error } = await supabase
         .from("photos")
         .select("id, title, category, storage_url, created_at")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }); // newest first
       if (error) throw error;
       setPhotos(data || []);
-      setFiltered(data || []);
     } catch (e) {
       console.error(e);
       setFetchError(true);
@@ -202,6 +198,9 @@ const Gallery = () => {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [selectedPhoto, navigate]);
+
+  // Skeleton rows
+  const skeletonCount = 12;
 
   return (
     <section id="gallery" className="py-16 md:py-24 bg-background min-h-screen">
@@ -260,21 +259,13 @@ const Gallery = () => {
 
         {/* Skeleton */}
         {loading ? (
-          <div className="columns-2 sm:columns-3 lg:columns-4 gap-3 md:gap-4">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div
-                key={i}
-                className="break-inside-avoid mb-3 md:mb-4 rounded-xl shimmer"
-                style={{ aspectRatio: "3/2" }}
-              />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+            {Array.from({ length: skeletonCount }).map((_, i) => (
+              <div key={i} className="rounded-xl shimmer" style={{ aspectRatio: "3/2" }} />
             ))}
           </div>
         ) : fetchError ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-24 space-y-4"
-          >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-24 space-y-4">
             <p className="text-muted-foreground">Couldn't load photos. Check your connection.</p>
             <button
               onClick={() => { setLoading(true); fetchPhotos(); }}
@@ -284,28 +275,33 @@ const Gallery = () => {
             </button>
           </motion.div>
         ) : filtered.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-24 text-muted-foreground"
-          >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-24 text-muted-foreground">
             No photos in this category yet.
           </motion.div>
         ) : (
+          // Uniform grid — every cell the same 3:2 aspect ratio.
+          // No masonry, no columns — just a clean responsive grid.
+          // grid-rows are auto-sized by the tallest cell in each row,
+          // but since every cell is forced to 3:2 via aspect-ratio all rows are equal.
           <motion.div
             key={activeFilter}
-            className="columns-2 sm:columns-3 lg:columns-4 gap-3 md:gap-4"
+            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4"
+            style={{ gridAutoRows: "1fr" }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
           >
             {filtered.map((photo, index) => (
-              <PhotoTile
+              <div
                 key={photo.id}
-                photo={photo}
-                onClick={() => openPhoto(photo)}
-                index={index}
-              />
+                style={{ aspectRatio: "3/2" }}
+              >
+                <PhotoTile
+                  photo={photo}
+                  onClick={() => openPhoto(photo)}
+                  index={index}
+                />
+              </div>
             ))}
           </motion.div>
         )}
@@ -314,9 +310,7 @@ const Gallery = () => {
       {/* Lightbox */}
       <Dialog open={!!selectedPhoto} onOpenChange={() => setSelectedPhoto(null)}>
         <DialogContent className="max-w-6xl p-0 bg-black/95 border-border/40 max-h-[95vh] overflow-hidden">
-          <DialogTitle className="sr-only">
-            Photo Viewer — {selectedPhoto?.title}
-          </DialogTitle>
+          <DialogTitle className="sr-only">Photo Viewer — {selectedPhoto?.title}</DialogTitle>
           <DialogDescription className="sr-only">View full size photo</DialogDescription>
 
           <button
